@@ -1,110 +1,232 @@
 /*******************************************************************************************
-*
-*   raylib [core] example - Basic 3d example
-*
-*   Welcome to raylib!
-*
-*   To compile example, just press F5.
-*   Note that compiled executable is placed in the same folder as .c file
-*
-*   You can find all basic examples on C:\raylib\raylib\examples folder or
-*   raylib official webpage: www.raylib.com
-*
-*   Enjoy using raylib. :)
-*
-*   This example has been created using raylib 1.0 (www.raylib.com)
-*   raylib is licensed under an unmodified zlib/libpng license (View raylib.h for details)
-*
-*   Copyright (c) 2013-2022 Ramon Santamaria (@raysan5)
-*
-********************************************************************************************/
+ *
+ *   Scope & Goals:
+ *   This is a C port of the Dino Game from the Google Chrome browser.
+ *   This game is a work in progress and is not yet complete.
+ *   The goal of this project is to learn C.
+ *
+ *   Dependencies:
+ *   This game uses raylib. raylib is licensed wit the zlib/libpng license (www.raylib.com)
+ *
+ *   Copyright & License:
+ *   This game is licensed under the ISC License (github.com/richardstephens-dev/chrome-dino-game-c-clone)
+ *   Copyright (c) 2023 Richard J Stephens
+ *
+ ********************************************************************************************/
 
-#include "raylib.h"
-
-#if defined(PLATFORM_WEB)
-    #include <emscripten/emscripten.h>
-#endif
-
+// Includes
 //----------------------------------------------------------------------------------
+#include "raylib.h"
+//----------------------------------------------------------------------------------
+
 // Local Variables Definition (local to this module)
 //----------------------------------------------------------------------------------
-Camera camera = { 0 };
-Vector3 cubePosition = { 0 };
-
+#define MAX_FRAME_SPEED 15
+#define MIN_FRAME_SPEED 1
 //----------------------------------------------------------------------------------
+
 // Local Functions Declaration
 //----------------------------------------------------------------------------------
-static void UpdateDrawFrame(void);          // Update and draw one frame
-
+int UpdateFrameCounter(int dinoFrameCounter, int frameSpeed, int dinoCurrentFrame, Rectangle dinoFrameRec);
+int UpdateCurrentFrame(int dinoCurrentFrame, int dinoFrameCounter);
+Rectangle UpdateFrameRec(int dinoCurrentFrame, Rectangle dinoFrameRec);
+int UpdateFrameSpeed(int frameSpeed);
+bool IsJumping(float dinoY, bool isJumping);
+float UpdateDinoY(float dinoY, bool isJumping);
+float UpdateDinoX(float dinoX);
 //----------------------------------------------------------------------------------
+
 // Main entry point
 //----------------------------------------------------------------------------------
-int main() 
+int main(void)
 {
     // Initialization
     //--------------------------------------------------------------------------------------
     const int screenWidth = 800;
     const int screenHeight = 450;
 
-    InitWindow(screenWidth, screenHeight, "raylib");
+    InitWindow(screenWidth, screenHeight, "Dino Game");
 
-    camera.position = (Vector3){ 10.0f, 10.0f, 8.0f };
-    camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };
-    camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
-    camera.fovy = 60.0f;
-    camera.projection = CAMERA_PERSPECTIVE;
-    
-    SetCameraMode(camera, CAMERA_ORBITAL);
+    // dino stuff
+    Image image = LoadImage("resources/dino.png");
+    Texture2D dinoTexture = LoadTextureFromImage(image);
+    UnloadImage(image);
+    Rectangle dinoFrameRec = {0.0f, 0.0f, (float)dinoTexture.width / 6, (float)dinoTexture.height};
+    int dinoCurrentFrame = 0;
+    int dinoFrameCounter = 0;
+    int frameSpeed = 8; // Number of spritesheet frames shown by second
+    float dinoY = 280.0f;
+    float dinoX = 250.0f;
+    bool isJumping = false;
+    bool isCrouching = false;
+    Vector2 dinoPos = {dinoX, dinoY};
 
+    SetTargetFPS(60); // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
 
-#if defined(PLATFORM_WEB)
-    emscripten_set_main_loop(UpdateDrawFrame, 60, 1);
-#else
-    SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
+    // Wait for game to start
+    //--------------------------------------------------------------------------------------
+    while (!IsKeyPressed(KEY_ENTER) && !WindowShouldClose())
+    {
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+        DrawText("Press ENTER to start!", 200, 200, 20, PINK);
+        EndDrawing();
+    }
     //--------------------------------------------------------------------------------------
 
     // Main game loop
-    while (!WindowShouldClose())    // Detect window close button or ESC key
+    //--------------------------------------------------------------------------------------
+    while (!WindowShouldClose()) // Detect window close button or ESC key
     {
-        UpdateDrawFrame();
+        // Update
+        //----------------------------------------------------------------------------------
+        dinoFrameCounter = UpdateFrameCounter(dinoFrameCounter, frameSpeed, dinoCurrentFrame, dinoFrameRec);
+        dinoCurrentFrame = UpdateCurrentFrame(dinoCurrentFrame, dinoFrameCounter);
+        dinoFrameRec = UpdateFrameRec(dinoCurrentFrame, dinoFrameRec);
+        frameSpeed = UpdateFrameSpeed(frameSpeed);
+        isJumping = IsJumping(dinoY, isJumping);
+        dinoY = UpdateDinoY(dinoY, isJumping);
+        dinoPos = (Vector2){dinoX, dinoY};
+        //----------------------------------------------------------------------------------
+
+        // Draw
+        //----------------------------------------------------------------------------------
+        BeginDrawing();
+        ClearBackground(RAYWHITE);
+        DrawText(TextFormat("%02i FPS", GetFPS()), 575, 210, 50, PINK);
+        DrawTextureRec(dinoTexture, dinoFrameRec, dinoPos, WHITE);
+        DrawText(TextFormat("Dino X: %f", dinoX), 575, 10, 20, PINK);
+        DrawText(TextFormat("Dino Y: %f", dinoY), 575, 30, 20, PINK);
+        DrawText(TextFormat("Is Jumping: %s", isJumping ? "true" : "false"), 575, 70, 20, PINK);
+        EndDrawing();
+        //----------------------------------------------------------------------------------
     }
-#endif
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
-    CloseWindow();                  // Close window and OpenGL context
+    UnloadTexture(dinoTexture); // Unload dinoTexture
+    CloseWindow();              // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
 
     return 0;
 }
+// ----------------------------------------------------------------------------------
 
-// Update and draw game frame
-static void UpdateDrawFrame(void)
+// Animation + Frames Functions Definition
+// ----------------------------------------------------------------------------------
+int UpdateFrameCounter(int frameCounter, int frameSpeed, int currentFrame, Rectangle frameRec)
 {
-    // Update
-    //----------------------------------------------------------------------------------
-    UpdateCamera(&camera);
-    //----------------------------------------------------------------------------------
+    frameCounter++;
+    if (frameCounter >= (60 / frameSpeed))
+    {
+        frameCounter = 0;
+    }
+    return frameCounter;
+}
 
-    // Draw
-    //----------------------------------------------------------------------------------
-    BeginDrawing();
+int UpdateCurrentFrame(int currentFrame, int frameCounter)
+{
+    if (frameCounter == 0)
+    {
+        currentFrame++;
+        if (currentFrame >= 2)
+            currentFrame = 0;
+    }
+    return currentFrame;
+}
 
-        ClearBackground(RAYWHITE);
+Rectangle UpdateFrameRec(int currentFrame, Rectangle frameRec)
+{
+    frameRec.x = (float)currentFrame * (float)frameRec.width + (float)frameRec.width * 2;
+    return frameRec;
+}
 
-        BeginMode3D(camera);
+int UpdateFrameSpeed(int frameSpeed)
+{
+    if (IsKeyPressed(KEY_RIGHT))
+        frameSpeed++;
+    else if (IsKeyPressed(KEY_LEFT))
+        frameSpeed--;
 
-            DrawCube(cubePosition, 2.0f, 2.0f, 2.0f, RED);
-            DrawCubeWires(cubePosition, 2.0f, 2.0f, 2.0f, MAROON);
-            DrawGrid(10, 1.0f);
+    if (frameSpeed > MAX_FRAME_SPEED)
+        frameSpeed = MAX_FRAME_SPEED;
+    else if (frameSpeed < MIN_FRAME_SPEED)
+        frameSpeed = MIN_FRAME_SPEED;
 
-        EndMode3D();
+    return frameSpeed;
+}
+// ----------------------------------------------------------------------------------
 
-        DrawText("This is a raylib example", 10, 40, 20, DARKGRAY);
+// Input Functions Definition
+// ----------------------------------------------------------------------------------
+bool IsJumping(float dinoY, bool isJumping)
+{
+    if (dinoY <= 100.0f)
+    {
+        return false;
+    }
+    if (isJumping)
+    {
+        return true;
+    }
+    if (dinoY != 280.0f)
+    {
+        return false;
+    }
+    if (IsKeyPressed(KEY_SPACE))
+    {
+        return true;
+    }
+    if (IsKeyPressed(KEY_UP))
+    {
+        return true;
+    }
+    return false;
+}
 
-        DrawFPS(10, 10);
+bool IsDucking()
+{
+    if (IsKeyDown(KEY_DOWN))
+    {
+        return true;
+    }
+    return false;
+}
+// ----------------------------------------------------------------------------------
 
-    EndDrawing();
-    //----------------------------------------------------------------------------------
+// Collision Functions Definition
+// ----------------------------------------------------------------------------------
+bool IsColliding(Rectangle dinoRec, Rectangle cactusRec)
+{
+    if (CheckCollisionRecs(dinoRec, cactusRec))
+    {
+        return true;
+    }
+    return false;
+}
+// ----------------------------------------------------------------------------------
+
+// Dino Movement Functions Definition
+// ----------------------------------------------------------------------------------
+float UpdateDinoY(float dinoY, bool isJumping)
+{
+    if (isJumping)
+    {
+        dinoY -= 5.0f;
+    }
+    else if (dinoY < 280.0f)
+    {
+        dinoY += 5.0f;
+    }
+    else
+    {
+        dinoY = 280.0f;
+    }
+    return dinoY;
+}
+
+float UpdateDinoX(float dinoX)
+{
+    return dinoX;
 }
