@@ -21,8 +21,137 @@
 
 // Local Variables Definition (local to this module)
 //----------------------------------------------------------------------------------
-#define MAX_FRAME_SPEED 15
-#define MIN_FRAME_SPEED 1
+#define MAX_ENTITIES 99
+const int MAX_FRAME_SPEED = 99;
+const int MIN_FRAME_SPEED = 60;
+const int FPS = 60;
+const float ACCELERATION = 0.001;
+const float BG_CLOUD_SPEED = 0.2;
+const int BOTTOM_PAD = 10;
+const int CLEAR_TIME = 3000;
+const float CLOUD_FREQUENCY = 0.5;
+const int GAMEOVER_CLEAR_TIME = 750;
+const float GAP_COEFFICIENT = 0.6;
+const float GRAVITY = 0.6;
+const int INIITAL_JUMP_VELOCITY = 12;
+const int INVERT_FADE_DURATION = 12000;
+const int INVERT_DISTANCE = 700;
+const int MAX_BLINK_COUNT = 3;
+const int MAX_CLOUDS = 6;
+const int MAX_OBSTACLE_LENGTH = 3;
+const int MAX_OBSTACLE_DUPLICATION = 2;
+const int MAX_SPEED = 13;
+const int MIN_JUMP_HEIGHT = 35;
+const int SPEED = 6;
+const int SPEED_DROP_COEFFICIENT = 3;
+const int HEIGHT = 150;
+const int WIDTH = 600;
+const int TREX_SPRITES_X = 1678;
+const int TREX_SPRITES_Y = 2;
+const int TREX_SPRITES_WIDTH = 44;
+const int TREX_SPRITES_HEIGHT = 47;
+const int TREX_SPRITES_WIDTH_DUCK = 59;
+const int TREX_SPRITES_HEIGHT_DUCK = 47;
+const int CACTUS_LARGE_SPRITE_X = 652;
+const int CACTUS_LARGE_SPRITE_Y = 2;
+const int CACTUS_LARGE_SPRITE_WIDTH = 25;
+const int CACTUS_LARGE_SPRITE_HEIGHT = 70;
+const int CACTUS_SMALL_SPRITE_X = 446;
+const int CACTUS_SMALL_SPRITE_Y = 2;
+const int CACTUS_SMALL_SPRITE_WIDTH = 17;
+const int CACTUS_SMALL_SPRITE_HEIGHT = 35;
+const int CLOUD_SPRITE_X = 166;
+const int CLOUD_SPRITE_Y = 2;
+const int CLOUD_SPRITE_WIDTH = 46;
+const int CLOUD_SPRITE_HEIGHT = 27;
+const int HORIZON_SPRITE_X = 2;
+const int HORIZON_SPRITE_Y = 104;
+const int HORIZON_SPRITE_WIDTH = 600;
+const int MOON_SPRITE_X = 954;
+const int MOON_SPRITE_Y = 2;
+const int PTERODACTYL_SPRITE_X = 260;
+const int PTERODACTYL_SPRITE_Y = 2;
+const int PTERODACTYL_SPRITE_WIDTH = 46;
+const int PTERODACTYL_SPRITE_HEIGHT = 40;
+const int RESTART_SPRITE_X = 2;
+const int RESTART_SPRITE_Y = 2;
+const int RESTART_SPRITE_WIDTH = 46;
+const int RESTART_SPRITE_HEIGHT = 40;
+const int TEXT_SPRITE_X = 1294;
+const int TEXT_SPRITE_Y = 2;
+const int TEXT_SPRITE_WIDTH = 192;
+const int TEXT_SPRITE_HEIGHT = 11;
+const int STAR_SPRITE_X = 1276;
+const int STAR_SPRITE_Y = 2;
+const int JUMP_KEY = 38;
+const int JUMP_KEY_ALT = 32;
+const int DUCK_KEY = 40;
+const int RESTART_KEY = 13;
+
+// non const/macro variables
+int nextEntityId = 0;
+//----------------------------------------------------------------------------------
+
+// Entity Component System: typedefs
+// ----------------------------------------------------------------------------------
+// everything except GUI should go in here
+typedef struct sizeComponent
+{
+    int width, height;
+} SizeComponent;
+SizeComponent sizeComponents[MAX_ENTITIES];
+
+typedef struct PositionComponent
+{
+    float x, y;
+} PositionComponent;
+PositionComponent positionComponents[MAX_ENTITIES];
+
+typedef struct VelocityComponent
+{
+    float x, y;
+} VelocityComponent;
+VelocityComponent velocityComponents[MAX_ENTITIES];
+
+typedef struct SpriteComponent
+{
+    Texture2D texture;
+} SpriteComponent;
+SpriteComponent spriteComponents[MAX_ENTITIES];
+
+typedef struct AnimationComponent
+{
+    int currentFrameIndex;
+    int frameIndexSlice[2];
+    int framesSpeed;
+} AnimationComponent;
+AnimationComponent animationComponents[MAX_ENTITIES];
+
+typedef struct DinoComponent
+{
+    bool isCrouching;
+    bool isJumping;
+    bool isDead;
+} DinoComponent;
+DinoComponent dinoComponents[MAX_ENTITIES];
+
+typedef struct CollisionComponent
+{
+    Rectangle collisionRec;
+} CollisionComponent;
+CollisionComponent collisionComponents[MAX_ENTITIES];
+
+typedef struct ObstacleComponent
+{
+    bool isObstacle;
+} ObstacleComponent;
+ObstacleComponent obstacleComponents[MAX_ENTITIES];
+
+typedef struct Entity
+{
+    int id;
+    int component_mask;
+} Entity;
 //----------------------------------------------------------------------------------
 
 // Local Functions Declaration
@@ -35,7 +164,23 @@ int UpdateFrameSpeed(int frameSpeed);
 bool IsJumping(float dinoY, bool isJumping);
 float UpdateDinoY(float dinoY, bool isJumping);
 float UpdateDinoX(float dinoX);
+Entity CreateEntity();
+void AddComponent(Entity e, int component);
 //----------------------------------------------------------------------------------
+
+// Entity Component System: Functions
+// ----------------------------------------------------------------------------------
+Entity CreateEntity()
+{
+    Entity e = {nextEntityId++, 0};
+    return e;
+}
+
+void AddComponent(Entity e, int component)
+{
+    e.component_mask |= component;
+}
+// ----------------------------------------------------------------------------------
 
 // Main entry point
 //----------------------------------------------------------------------------------
@@ -43,15 +188,17 @@ int main(void)
 {
     // Initialization
     //--------------------------------------------------------------------------------------
-    const int screenWidth = 800;
-    const int screenHeight = 450;
+    // TODO: adjust dimensions on resize
+    InitWindow(WIDTH, HEIGHT, "Dino Game");
 
-    InitWindow(screenWidth, screenHeight, "Dino Game");
-
-    // dino stuff
+    // images
     Image image = LoadImage("resources/dino.png");
     Texture2D dinoTexture = LoadTextureFromImage(image);
     UnloadImage(image);
+
+    // horizon: clouds, obstacles, ground
+
+    //
     Rectangle dinoFrameRec = {0.0f, 0.0f, (float)dinoTexture.width / 6, (float)dinoTexture.height};
     int dinoCurrentFrame = 0;
     int dinoFrameCounter = 0;

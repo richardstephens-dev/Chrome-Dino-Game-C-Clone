@@ -19,4 +19,5 @@ CONVENTIONS.md
 main.code-workspace
 MakeFile
 Makefile.Android
-.aseprite
+*.aseprite
+*.js
