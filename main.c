@@ -27,9 +27,10 @@
 
 // Local Functions Declaration
 //----------------------------------------------------------------------------------
+void UpdateDinoAnimationIndexSlice(bool isCrouching, int dinoY, int dinoAnimationIndexSlice[]);
 int UpdateFrameCounter(int dinoFrameCounter, int frameSpeed, int dinoCurrentFrame, Rectangle dinoFrameRec);
-int UpdateCurrentFrame(int dinoCurrentFrame, int dinoFrameCounter);
-Rectangle UpdateFrameRec(int dinoCurrentFrame, Rectangle dinoFrameRec);
+int UpdateCurrentFrame(int dinoCurrentFrame, int dinoFrameCounter, int dinoAnimationIndexSlice[]);
+Rectangle UpdateFrameRec(int dinoCurrentFrame, Rectangle dinoFrameRec, int dinoAnimationIndexSlice[]);
 int UpdateFrameSpeed(int frameSpeed);
 bool IsJumping(float dinoY, bool isJumping);
 float UpdateDinoY(float dinoY, bool isJumping);
@@ -57,6 +58,7 @@ int main(void)
     int frameSpeed = 8; // Number of spritesheet frames shown by second
     float dinoY = 280.0f;
     float dinoX = 250.0f;
+    int dinoAnimationIndexSlice[2] = {0, 0};
     bool isJumping = false;
     bool isCrouching = false;
     Vector2 dinoPos = {dinoX, dinoY};
@@ -81,9 +83,10 @@ int main(void)
     {
         // Update
         //----------------------------------------------------------------------------------
+        UpdateDinoAnimationIndexSlice(isCrouching, dinoY, dinoAnimationIndexSlice);
         dinoFrameCounter = UpdateFrameCounter(dinoFrameCounter, frameSpeed, dinoCurrentFrame, dinoFrameRec);
-        dinoCurrentFrame = UpdateCurrentFrame(dinoCurrentFrame, dinoFrameCounter);
-        dinoFrameRec = UpdateFrameRec(dinoCurrentFrame, dinoFrameRec);
+        dinoCurrentFrame = UpdateCurrentFrame(dinoCurrentFrame, dinoFrameCounter, dinoAnimationIndexSlice);
+        dinoFrameRec = UpdateFrameRec(dinoCurrentFrame, dinoFrameRec, dinoAnimationIndexSlice);
         frameSpeed = UpdateFrameSpeed(frameSpeed);
         isJumping = IsJumping(dinoY, isJumping);
         dinoY = UpdateDinoY(dinoY, isJumping);
@@ -96,9 +99,11 @@ int main(void)
         ClearBackground(RAYWHITE);
         DrawText(TextFormat("%02i FPS", GetFPS()), 575, 210, 50, PINK);
         DrawTextureRec(dinoTexture, dinoFrameRec, dinoPos, WHITE);
-        DrawText(TextFormat("Dino X: %f", dinoX), 575, 10, 20, PINK);
-        DrawText(TextFormat("Dino Y: %f", dinoY), 575, 30, 20, PINK);
+        DrawText(TextFormat("Dino X: %i", (int)dinoX), 575, 10, 20, PINK);
+        DrawText(TextFormat("Dino Y: %i", (int)dinoY), 575, 30, 20, PINK);
         DrawText(TextFormat("Is Jumping: %s", isJumping ? "true" : "false"), 575, 70, 20, PINK);
+        DrawText(TextFormat("Is Crouching: %s", isCrouching ? "true" : "false"), 575, 90, 20, PINK);
+        DrawText(TextFormat("Animation Slice: %i %i", dinoAnimationIndexSlice[0], dinoAnimationIndexSlice[1]), 575, 130, 20, PINK);
         EndDrawing();
         //----------------------------------------------------------------------------------
     }
@@ -115,6 +120,25 @@ int main(void)
 
 // Animation + Frames Functions Definition
 // ----------------------------------------------------------------------------------
+void UpdateDinoAnimationIndexSlice(bool isCrouching, int dinoY, int dinoAnimationIndexSlice[])
+{
+    if (isCrouching)
+    {
+        dinoAnimationIndexSlice[0] = 0;
+        dinoAnimationIndexSlice[1] = 0;
+    }
+    else if (dinoY < 280.0f)
+    {
+        dinoAnimationIndexSlice[0] = 0;
+        dinoAnimationIndexSlice[1] = 0;
+    }
+    else
+    {
+        dinoAnimationIndexSlice[0] = 2;
+        dinoAnimationIndexSlice[1] = 3;
+    }
+}
+
 int UpdateFrameCounter(int frameCounter, int frameSpeed, int currentFrame, Rectangle frameRec)
 {
     frameCounter++;
@@ -125,20 +149,20 @@ int UpdateFrameCounter(int frameCounter, int frameSpeed, int currentFrame, Recta
     return frameCounter;
 }
 
-int UpdateCurrentFrame(int currentFrame, int frameCounter)
+int UpdateCurrentFrame(int currentFrame, int frameCounter, int animationIndexSlice[])
 {
     if (frameCounter == 0)
     {
         currentFrame++;
-        if (currentFrame >= 2)
+        if (currentFrame > animationIndexSlice[1] - animationIndexSlice[0])
             currentFrame = 0;
     }
     return currentFrame;
 }
 
-Rectangle UpdateFrameRec(int currentFrame, Rectangle frameRec)
+Rectangle UpdateFrameRec(int currentFrame, Rectangle frameRec, int animationIndexSlice[])
 {
-    frameRec.x = (float)currentFrame * (float)frameRec.width + (float)frameRec.width * 2;
+    frameRec.x = (float)currentFrame * (float)frameRec.width + (float)frameRec.width * animationIndexSlice[0];
     return frameRec;
 }
 
