@@ -2,14 +2,17 @@
  *
  *   Scope & Goals:
  *   This is a C port of the Dino Game from the Google Chrome browser.
+ *   (https://www.google.com/chrome/terms/)
  *   This game is a work in progress and is not yet complete.
  *   The goal of this project is to learn C.
  *
  *   Dependencies:
- *   This game uses raylib. raylib is licensed wit the zlib/libpng license (www.raylib.com)
+ *   This game uses raylib. raylib is licensed wit the zlib/libpng license.
+ *   (www.raylib.com)
  *
  *   Copyright & License:
- *   This game is licensed under the ISC License (github.com/richardstephens-dev/chrome-dino-game-c-clone)
+ *   This code is licensed under the ISC License.
+ *   (https://www.github.com/richardstephens-dev/chrome-dino-game-c-clone)
  *   Copyright (c) 2023 Richard J Stephens
  *
  ********************************************************************************************/
@@ -44,14 +47,12 @@ const int MAX_SPEED = 13;
 const int MIN_JUMP_HEIGHT = 35;
 const int SPEED = 6;
 const int SPEED_DROP_COEFFICIENT = 3;
-const int HEIGHT = 150;
-const int WIDTH = 600;
-const int TREX_SPRITES_X = 1678;
-const int TREX_SPRITES_Y = 2;
-const int TREX_SPRITES_WIDTH = 44;
-const int TREX_SPRITES_HEIGHT = 47;
-const int TREX_SPRITES_WIDTH_DUCK = 59;
-const int TREX_SPRITES_HEIGHT_DUCK = 47;
+const int HEIGHT = 480;
+const int WIDTH = 800;
+const int TREX_SPRITES_WIDTH = 88;
+const int TREX_SPRITES_HEIGHT = 94;
+const int TREX_SPRITES_WIDTH_DUCK = 88;
+const int TREX_SPRITES_HEIGHT_DUCK = 94;
 const int CACTUS_LARGE_SPRITE_X = 652;
 const int CACTUS_LARGE_SPRITE_Y = 2;
 const int CACTUS_LARGE_SPRITE_WIDTH = 25;
@@ -87,6 +88,16 @@ const int JUMP_KEY = 38;
 const int JUMP_KEY_ALT = 32;
 const int DUCK_KEY = 40;
 const int RESTART_KEY = 13;
+const enum ComponentsEnum {
+    SIZE = 0,
+    POSITION = 1,
+    VELOCITY = 2,
+    SPRITE = 3,
+    ANIMATION = 4,
+    DINO = 5,
+    COLLISION = 6,
+    OBSTACLE = 7
+};
 
 // non const/macro variables
 int nextEntityId = 0;
@@ -95,7 +106,7 @@ int nextEntityId = 0;
 // Entity Component System: typedefs
 // ----------------------------------------------------------------------------------
 // everything except GUI should go in here
-typedef struct sizeComponent
+typedef struct SizeComponent
 {
     int width, height;
 } SizeComponent;
@@ -116,6 +127,7 @@ VelocityComponent velocityComponents[MAX_ENTITIES];
 typedef struct SpriteComponent
 {
     Texture2D texture;
+    Rectangle sourceRec;
 } SpriteComponent;
 SpriteComponent spriteComponents[MAX_ENTITIES];
 
@@ -124,12 +136,13 @@ typedef struct AnimationComponent
     int currentFrameIndex;
     int frameIndexSlice[2];
     int framesSpeed;
+    int framesCounter;
 } AnimationComponent;
 AnimationComponent animationComponents[MAX_ENTITIES];
 
 typedef struct DinoComponent
 {
-    bool isCrouching;
+    bool isDucking;
     bool isJumping;
     bool isDead;
 } DinoComponent;
@@ -156,16 +169,17 @@ typedef struct Entity
 
 // Local Functions Declaration
 //----------------------------------------------------------------------------------
-void UpdateDinoAnimationIndexSlice(bool isCrouching, int dinoY, int dinoAnimationIndexSlice[]);
-int UpdateFrameCounter(int dinoFrameCounter, int frameSpeed, int dinoCurrentFrame, Rectangle dinoFrameRec);
-int UpdateCurrentFrame(int dinoCurrentFrame, int dinoFrameCounter, int dinoAnimationIndexSlice[]);
-Rectangle UpdateFrameRec(int dinoCurrentFrame, Rectangle dinoFrameRec, int dinoAnimationIndexSlice[]);
-int UpdateFrameSpeed(int frameSpeed);
 bool IsJumping(float dinoY, bool isJumping);
 float UpdateDinoY(float dinoY, bool isJumping);
 float UpdateDinoX(float dinoX);
 Entity CreateEntity();
 void AddComponent(Entity e, int component);
+bool HasComponent(Entity e, int component);
+void UpdateDinoSystem(Entity *entities);
+void UpdateFrameCounterSystem(Entity *entities);
+void UpdateCurrentFrameIndexSystem(Entity *entities);
+bool IsDucking(int posY);
+
 //----------------------------------------------------------------------------------
 
 // Entity Component System: Functions
@@ -178,8 +192,46 @@ Entity CreateEntity()
 
 void AddComponent(Entity e, int component)
 {
+    if (component == SIZE)
+    {
+        sizeComponents[e.id] = (SizeComponent){0};
+    }
+    if (component == POSITION)
+    {
+        positionComponents[e.id] = (PositionComponent){0};
+    }
+    if (component == VELOCITY)
+    {
+        velocityComponents[e.id] = (VelocityComponent){0};
+    }
+    if (component == SPRITE)
+    {
+        spriteComponents[e.id] = (SpriteComponent){0};
+    }
+    if (component == ANIMATION)
+    {
+        animationComponents[e.id] = (AnimationComponent){0};
+    }
+    if (component == DINO)
+    {
+        dinoComponents[e.id] = (DinoComponent){0};
+    }
+    if (component == COLLISION)
+    {
+        collisionComponents[e.id] = (CollisionComponent){0};
+    }
+    if (component == OBSTACLE)
+    {
+        obstacleComponents[e.id] = (ObstacleComponent){0};
+    }
     e.component_mask |= component;
 }
+
+bool HasComponent(Entity e, int component)
+{
+    return e.component_mask & component;
+}
+
 // ----------------------------------------------------------------------------------
 
 // Main entry point
@@ -199,7 +251,7 @@ int main(void)
     // horizon: clouds, obstacles, ground
 
     //
-    Rectangle dinoFrameRec = {0.0f, 0.0f, (float)dinoTexture.width / 6, (float)dinoTexture.height};
+    /*Rectangle dinoFrameRec = {0.0f, 0.0f, (float)dinoTexture.width / 6, (float)dinoTexture.height};
     int dinoCurrentFrame = 0;
     int dinoFrameCounter = 0;
     int frameSpeed = 8; // Number of spritesheet frames shown by second
@@ -207,8 +259,30 @@ int main(void)
     float dinoX = 250.0f;
     int dinoAnimationIndexSlice[2] = {0, 0};
     bool isJumping = false;
-    bool isCrouching = false;
-    Vector2 dinoPos = {dinoX, dinoY};
+    bool isDucking = false;
+    Vector2 dinoPos = {dinoX, dinoY};*/
+
+    // set up dino entity
+    // make array of entities
+    Entity entities[MAX_ENTITIES];
+    Entity dino = CreateEntity();
+    entities[dino.id] = dino;
+    AddComponent(dino, SIZE);
+    AddComponent(dino, POSITION);
+    AddComponent(dino, VELOCITY);
+    AddComponent(dino, SPRITE);
+    AddComponent(dino, ANIMATION);
+    AddComponent(dino, DINO);
+    AddComponent(dino, COLLISION);
+    sizeComponents[dino.id] = (SizeComponent){dinoTexture.width / 6, dinoTexture.height};
+    positionComponents[dino.id] = (PositionComponent){250.0f, 280.0f};
+    velocityComponents[dino.id] = (VelocityComponent){0.0f, 0.0f};
+    spriteComponents[dino.id] = (SpriteComponent){dinoTexture, {0.0f, 0.0f, (float)dinoTexture.width / 6, (float)dinoTexture.height}};
+    animationComponents[dino.id] = (AnimationComponent){0, {2, 3}, 8, 0};
+    dinoComponents[dino.id] = (DinoComponent){false, false, false};
+    collisionComponents[dino.id] = (CollisionComponent){(Rectangle){positionComponents[dino.id].x, positionComponents[dino.id].y, sizeComponents[dino.id].width, sizeComponents[dino.id].height}};
+
+    // show dinoTexture width / 6 and height
 
     SetTargetFPS(60); // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
@@ -228,16 +302,13 @@ int main(void)
     //--------------------------------------------------------------------------------------
     while (!WindowShouldClose()) // Detect window close button or ESC key
     {
-        // Update
+        // Update Systems
         //----------------------------------------------------------------------------------
-        UpdateDinoAnimationIndexSlice(isCrouching, dinoY, dinoAnimationIndexSlice);
-        dinoFrameCounter = UpdateFrameCounter(dinoFrameCounter, frameSpeed, dinoCurrentFrame, dinoFrameRec);
-        dinoCurrentFrame = UpdateCurrentFrame(dinoCurrentFrame, dinoFrameCounter, dinoAnimationIndexSlice);
-        dinoFrameRec = UpdateFrameRec(dinoCurrentFrame, dinoFrameRec, dinoAnimationIndexSlice);
-        frameSpeed = UpdateFrameSpeed(frameSpeed);
-        isJumping = IsJumping(dinoY, isJumping);
-        dinoY = UpdateDinoY(dinoY, isJumping);
-        dinoPos = (Vector2){dinoX, dinoY};
+        UpdateDinoSystem(entities);
+        UpdateFrameCounterSystem(entities);
+        UpdateCurrentFrameIndexSystem(entities);
+        positionComponents[dino.id].x = UpdateDinoX(positionComponents[dino.id].x);
+        positionComponents[dino.id].y = UpdateDinoY(positionComponents[dino.id].y, dinoComponents[dino.id].isJumping);
         //----------------------------------------------------------------------------------
 
         // Draw
@@ -245,12 +316,14 @@ int main(void)
         BeginDrawing();
         ClearBackground(RAYWHITE);
         DrawText(TextFormat("%02i FPS", GetFPS()), 575, 210, 50, PINK);
-        DrawTextureRec(dinoTexture, dinoFrameRec, dinoPos, WHITE);
-        DrawText(TextFormat("Dino X: %i", (int)dinoX), 575, 10, 20, PINK);
-        DrawText(TextFormat("Dino Y: %i", (int)dinoY), 575, 30, 20, PINK);
-        DrawText(TextFormat("Is Jumping: %s", isJumping ? "true" : "false"), 575, 70, 20, PINK);
-        DrawText(TextFormat("Is Crouching: %s", isCrouching ? "true" : "false"), 575, 90, 20, PINK);
-        DrawText(TextFormat("Animation Slice: %i %i", dinoAnimationIndexSlice[0], dinoAnimationIndexSlice[1]), 575, 130, 20, PINK);
+        DrawTextureRec((Texture2D)spriteComponents[dino.id].texture, (Rectangle)spriteComponents[dino.id].sourceRec, (Vector2){positionComponents[dino.id].x, positionComponents[dino.id].y}, WHITE);
+        DrawText(TextFormat("Dino X: %i", (int)positionComponents[dino.id].x), 575, 10, 20, PINK);
+        DrawText(TextFormat("Dino Y: %i", (int)positionComponents[dino.id].y), 575, 30, 20, PINK);
+        DrawText(TextFormat("Is Jumping: %s", dinoComponents[dino.id].isJumping ? "true" : "false"), 575, 70, 20, PINK);
+        DrawText(TextFormat("Is Crouching: %s", dinoComponents[dino.id].isDucking ? "true" : "false"), 575, 90, 20, PINK);
+        DrawText(TextFormat("Animation Slice: %i %i", animationComponents[dino.id].frameIndexSlice[0], animationComponents[dino.id].frameIndexSlice[1]), 575, 130, 20, PINK);
+        DrawText(TextFormat("Current Frame: %i", animationComponents[dino.id].currentFrameIndex), 575, 150, 20, PINK);
+        DrawText(TextFormat("Frame Counter: %i", animationComponents[dino.id].framesCounter), 575, 170, 20, PINK);
         EndDrawing();
         //----------------------------------------------------------------------------------
     }
@@ -267,66 +340,62 @@ int main(void)
 
 // Animation + Frames Functions Definition
 // ----------------------------------------------------------------------------------
-void UpdateDinoAnimationIndexSlice(bool isCrouching, int dinoY, int dinoAnimationIndexSlice[])
+void UpdateDinoSystem(Entity *entities)
 {
-    if (isCrouching)
+    for (int i = 0; i < nextEntityId; i++)
     {
-        dinoAnimationIndexSlice[0] = 0;
-        dinoAnimationIndexSlice[1] = 0;
-    }
-    else if (dinoY < 280.0f)
-    {
-        dinoAnimationIndexSlice[0] = 0;
-        dinoAnimationIndexSlice[1] = 0;
-    }
-    else
-    {
-        dinoAnimationIndexSlice[0] = 2;
-        dinoAnimationIndexSlice[1] = 3;
+        dinoComponents[i].isJumping = IsJumping(positionComponents[i].y, dinoComponents[i].isJumping);
+        dinoComponents[i].isDucking = IsDucking(positionComponents[i].y);
+        if (positionComponents[i].y < 280)
+        {
+            spriteComponents[i].sourceRec.width = (float)TREX_SPRITES_WIDTH;
+            spriteComponents[i].sourceRec.height = (float)TREX_SPRITES_HEIGHT;
+            animationComponents[i].frameIndexSlice[0] = 0;
+            animationComponents[i].frameIndexSlice[1] = 0;
+        }
+        else if (dinoComponents[i].isDucking)
+        {
+            spriteComponents[i].sourceRec.width = (float)TREX_SPRITES_WIDTH_DUCK;
+            spriteComponents[i].sourceRec.height = (float)TREX_SPRITES_HEIGHT_DUCK;
+            animationComponents[i].frameIndexSlice[0] = 1;
+            animationComponents[i].frameIndexSlice[1] = 1;
+        }
+        else
+        {
+            spriteComponents[i].sourceRec.width = (float)TREX_SPRITES_WIDTH;
+            spriteComponents[i].sourceRec.height = (float)TREX_SPRITES_HEIGHT;
+            animationComponents[i].frameIndexSlice[0] = 2;
+            animationComponents[i].frameIndexSlice[1] = 3;
+        }
     }
 }
 
-int UpdateFrameCounter(int frameCounter, int frameSpeed, int currentFrame, Rectangle frameRec)
+void UpdateFrameCounterSystem(Entity *entities)
 {
-    frameCounter++;
-    if (frameCounter >= (60 / frameSpeed))
+    for (int i = 0; i < nextEntityId; i++)
     {
-        frameCounter = 0;
+        animationComponents[i].framesCounter++;
+        if (animationComponents[i].framesCounter >= (60 / animationComponents[i].framesSpeed))
+        {
+            animationComponents[i].framesCounter = 0;
+        }
     }
-    return frameCounter;
 }
 
-int UpdateCurrentFrame(int currentFrame, int frameCounter, int animationIndexSlice[])
+void UpdateCurrentFrameIndexSystem(Entity *entities)
 {
-    if (frameCounter == 0)
+    for (int i = 0; i < nextEntityId; i++)
     {
-        currentFrame++;
-        if (currentFrame > animationIndexSlice[1] - animationIndexSlice[0])
-            currentFrame = 0;
+        if (animationComponents[i].framesCounter == 0)
+        {
+            animationComponents[i].currentFrameIndex++;
+            if (animationComponents[i].currentFrameIndex > animationComponents[i].frameIndexSlice[1] - animationComponents[i].frameIndexSlice[0])
+                animationComponents[i].currentFrameIndex = 0;
+        }
+        spriteComponents[i].sourceRec.x = (float)spriteComponents[i].sourceRec.width * (float)(animationComponents[i].currentFrameIndex + animationComponents[i].frameIndexSlice[0]);
     }
-    return currentFrame;
 }
 
-Rectangle UpdateFrameRec(int currentFrame, Rectangle frameRec, int animationIndexSlice[])
-{
-    frameRec.x = (float)currentFrame * (float)frameRec.width + (float)frameRec.width * animationIndexSlice[0];
-    return frameRec;
-}
-
-int UpdateFrameSpeed(int frameSpeed)
-{
-    if (IsKeyPressed(KEY_RIGHT))
-        frameSpeed++;
-    else if (IsKeyPressed(KEY_LEFT))
-        frameSpeed--;
-
-    if (frameSpeed > MAX_FRAME_SPEED)
-        frameSpeed = MAX_FRAME_SPEED;
-    else if (frameSpeed < MIN_FRAME_SPEED)
-        frameSpeed = MIN_FRAME_SPEED;
-
-    return frameSpeed;
-}
 // ----------------------------------------------------------------------------------
 
 // Input Functions Definition
@@ -356,8 +425,12 @@ bool IsJumping(float dinoY, bool isJumping)
     return false;
 }
 
-bool IsDucking()
+bool IsDucking(int posY)
 {
+    if (posY < 280.0f)
+    {
+        return false;
+    }
     if (IsKeyDown(KEY_DOWN))
     {
         return true;
@@ -368,9 +441,9 @@ bool IsDucking()
 
 // Collision Functions Definition
 // ----------------------------------------------------------------------------------
-bool IsColliding(Rectangle dinoRec, Rectangle cactusRec)
+bool IsColliding(Rectangle rec1, Rectangle rec2)
 {
-    if (CheckCollisionRecs(dinoRec, cactusRec))
+    if (CheckCollisionRecs(rec1, rec2))
     {
         return true;
     }
