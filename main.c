@@ -228,7 +228,7 @@ int main(void)
     Texture2D dinoTexture = LoadTextureFromImage(dinoImage);
     UnloadImage(dinoImage);
 
-    Image horizonImage = LoadImage("resources/sprites.png");
+    Image horizonImage = LoadImage("resources/horizon.png");
     Texture2D horizonTexture = LoadTextureFromImage(horizonImage);
     UnloadImage(horizonImage);
 
@@ -270,6 +270,7 @@ int main(void)
     dinoComponents[dinoId] = (DinoComponent){false, false, false, 0, 0};
     collisionComponents[dinoId] = (CollisionComponent){(Rectangle){positionComponents[dinoId].x, positionComponents[dinoId].y, sizeComponents[dinoId].width, sizeComponents[dinoId].height}};
     int frameCounter = 0;
+    int score = 0;
     float scrollMultiplier = 1;
     float scrollIndex = 0;
 
@@ -308,17 +309,24 @@ int main(void)
             frameCounter++;
             scrollIndex -= 2.5f * scrollMultiplier;
             scrollMultiplier *= 1.0001f;
-            if (scrollIndex <= -horizonTexture.width * 2)
+            if (scrollIndex <= -horizonTexture.width)
             {
                 scrollIndex = 0;
             }
+            if (frameCounter % 10 == 0)
+            {
+                score += 1 * scrollMultiplier;
+            }
+
             //----------------------------------------------------------------------------------
 
             // Temporary / Testing / Debug
             //----------------------------------------------------------------------------------
-            DrawTextureEx(horizonTexture, (Vector2){scrollIndex, FLOOR_Y_POS}, 0.0f, 1.0f, WHITE);
-            DrawTextureEx(horizonTexture, (Vector2){scrollIndex + horizonTexture.width, FLOOR_Y_POS}, 0.0f, 1.0f, WHITE);
-            DrawText(TextFormat("FPS: %i", GetFPS()), 10, 10, 20, BLACK);
+            DrawTextureEx(horizonTexture, (Vector2){scrollIndex, FLOOR_Y_POS + TREX_SPRITES_HEIGHT - 40}, 0.0f, 1.0f, WHITE);
+            DrawTextureEx(horizonTexture, (Vector2){scrollIndex + horizonTexture.width, FLOOR_Y_POS + TREX_SPRITES_HEIGHT - 40}, 0.0f, 1.0f, WHITE);
+            DrawText(TextFormat("FPS: %i", GetFPS()), 400, 10, 20, BLACK);
+            // top right corner draw framecounter as score:
+            DrawText(TextFormat("%i", score), 10, 10, 20, BLACK);
             //----------------------------------------------------------------------------------
         }
 
