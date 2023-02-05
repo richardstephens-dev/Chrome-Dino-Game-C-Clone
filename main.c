@@ -20,6 +20,8 @@
 // Includes
 //----------------------------------------------------------------------------------
 #include "raylib.h"
+#include <stdlib.h>
+#include <math.h>
 //----------------------------------------------------------------------------------
 
 // Local Variables Definition (local to this module)
@@ -87,10 +89,10 @@ const int DUCK_KEY = 40;
 const int RESTART_KEY = 13;
 const float FLOOR_Y_POS = 280.0f;
 const float JUMP_Y_POS = 100.0f;
-const float INITIAL_JUMP_VELOCITY = -45.0f;
-const float DROP_VELOCITY = 6.0f;
-const int SPEED_DROP_COEFFICIENT = 3;
-const float GRAVITY = 0.6;
+const float INITIAL_JUMP_VELOCITY = -24.0f;
+const float DROP_VELOCITY = 12.0f;
+const float DINO_START_X_POS = 250.0f;
+const float DINO_PLAY_X_POS = WIDTH / 2 + TREX_SPRITES_WIDTH;
 
 enum ComponentsEnum
 {
@@ -102,6 +104,13 @@ enum ComponentsEnum
     DINO = 0b00100000,
     COLLISION = 0b01000000,
     OBSTACLE = 0b10000000
+};
+
+enum GameState
+{
+    MENU,
+    PLAYING,
+    GAMEOVER
 };
 
 // non const/macro variables
@@ -151,8 +160,7 @@ typedef struct DinoComponent
     bool isJumping;
     bool isDead;
     int jumpFrameCount;
-    bool speedDrop;
-    float jumpVelocity;
+    int slideFrameCount;
 } DinoComponent;
 DinoComponent dinoComponents[MAX_ENTITIES];
 
@@ -177,7 +185,7 @@ typedef struct Entity
 
 // Local Functions Declaration
 //----------------------------------------------------------------------------------
-bool IsJumping(float dinoY, bool isJumping);
+bool IsJumping(float y);
 Entity CreateEntity();
 void UpdateDinoAnimationSystem(Entity *entities);
 void UpdateDinoPositionSystem(Entity *entities);
@@ -187,6 +195,7 @@ void UpdateFrameCounterSystem(Entity *entities);
 void UpdateCurrentFrameIndexSystem(Entity *entities);
 bool IsDucking(int posY);
 bool HasComponent(Entity *entities, int id, int component);
+void DrawSpriteSystem(Entity *entities);
 
 //----------------------------------------------------------------------------------
 
@@ -213,10 +222,35 @@ int main(void)
     //--------------------------------------------------------------------------------------
     // TODO: adjust dimensions on resize
     InitWindow(WIDTH, HEIGHT, "Dino Game");
+    int gameState = MENU;
 
-    Image image = LoadImage("resources/dino.png");
-    Texture2D dinoTexture = LoadTextureFromImage(image);
-    UnloadImage(image);
+    Image dinoImage = LoadImage("resources/dino.png");
+    Texture2D dinoTexture = LoadTextureFromImage(dinoImage);
+    UnloadImage(dinoImage);
+
+    Image horizonImage = LoadImage("resources/sprites.png");
+    Texture2D horizonTexture = LoadTextureFromImage(horizonImage);
+    UnloadImage(horizonImage);
+
+    Image pterodactylImage = LoadImage("resources/ptero.png");
+    Texture2D pterodactylTexture = LoadTextureFromImage(pterodactylImage);
+    UnloadImage(pterodactylImage);
+
+    Image restartImage = LoadImage("resources/restart.png");
+    Texture2D restartTexture = LoadTextureFromImage(restartImage);
+    UnloadImage(restartImage);
+
+    Image cactusLargeImage = LoadImage("resources/cactus-large.png");
+    Texture2D cactusLargeTexture = LoadTextureFromImage(cactusLargeImage);
+    UnloadImage(cactusLargeImage);
+
+    Image cactusSmallImage = LoadImage("resources/cactus-small.png");
+    Texture2D cactusSmallTexture = LoadTextureFromImage(cactusSmallImage);
+    UnloadImage(cactusSmallImage);
+
+    Image cloudImage = LoadImage("resources/cloud.png");
+    Texture2D cloudTexture = LoadTextureFromImage(cloudImage);
+    UnloadImage(cloudImage);
 
     Entity entities[MAX_ENTITIES];
     int dinoId = nextEntityId;
@@ -229,66 +263,89 @@ int main(void)
     entities[dinoId].componentMask |= DINO;
     entities[dinoId].componentMask |= COLLISION;
     sizeComponents[dinoId] = (SizeComponent){dinoTexture.width / 6, dinoTexture.height};
-    positionComponents[dinoId] = (PositionComponent){250.0f, FLOOR_Y_POS};
+    positionComponents[dinoId] = (PositionComponent){DINO_START_X_POS, FLOOR_Y_POS};
     velocityComponents[dinoId] = (VelocityComponent){0.0f, 0.0f};
     spriteComponents[dinoId] = (SpriteComponent){dinoTexture, {0.0f, 0.0f, (float)dinoTexture.width / 6, (float)dinoTexture.height}};
     animationComponents[dinoId] = (AnimationComponent){0, {2, 3}, 8, 0};
-    dinoComponents[dinoId] = (DinoComponent){false, false, false, 0, false, INITIAL_JUMP_VELOCITY};
+    dinoComponents[dinoId] = (DinoComponent){false, false, false, 0, 0};
     collisionComponents[dinoId] = (CollisionComponent){(Rectangle){positionComponents[dinoId].x, positionComponents[dinoId].y, sizeComponents[dinoId].width, sizeComponents[dinoId].height}};
+    int frameCounter = 0;
+    float scrollMultiplier = 1;
+    float scrollIndex = 0;
 
     SetTargetFPS(60); // Set our game to run at 60 frames-per-second
-    //--------------------------------------------------------------------------------------
-
-    // Wait for game to start
-    //--------------------------------------------------------------------------------------
-    while (!IsKeyPressed(KEY_ENTER) && !WindowShouldClose())
-    {
-        BeginDrawing();
-        ClearBackground(RAYWHITE);
-        DrawText("Press ENTER to start!", 200, 200, 20, PINK);
-        EndDrawing();
-    }
     //--------------------------------------------------------------------------------------
 
     // Main game loop
     //--------------------------------------------------------------------------------------
     while (!WindowShouldClose()) // Detect window close button or ESC key
     {
-        // Update Systems
-        //----------------------------------------------------------------------------------
-        DrawText(TextFormat("Entity %i Component Mask: %i", dinoId, entities[dinoId].componentMask), 475, 50, 20, PINK);
+        // check game state
 
-        UpdateDinoAnimationSystem(entities);
-        UpdateDinoPositionSystem(entities);
-        UpdateDinoPoseSystem(entities);
-        UpdateDinoVelocitySystem(entities);
-        UpdateFrameCounterSystem(entities);
-        UpdateCurrentFrameIndexSystem(entities);
-        //----------------------------------------------------------------------------------
+        // menu state
+        if (gameState == MENU)
+        {
+            if (IsKeyPressed(KEY_ENTER))
+            {
+                gameState = PLAYING;
+            }
+        }
+
+        if (gameState == PLAYING)
+        {
+            // Update Systems
+            //----------------------------------------------------------------------------------
+            UpdateDinoAnimationSystem(entities);
+            UpdateDinoPositionSystem(entities);
+            UpdateDinoPoseSystem(entities);
+            UpdateDinoVelocitySystem(entities);
+            UpdateFrameCounterSystem(entities);
+            UpdateCurrentFrameIndexSystem(entities);
+            //----------------------------------------------------------------------------------
+
+            // Update game variables
+            //----------------------------------------------------------------------------------
+            frameCounter++;
+            scrollIndex -= 2.5f * scrollMultiplier;
+            scrollMultiplier *= 1.0001f;
+            if (scrollIndex <= -horizonTexture.width * 2)
+            {
+                scrollIndex = 0;
+            }
+            //----------------------------------------------------------------------------------
+
+            // Temporary / Testing / Debug
+            //----------------------------------------------------------------------------------
+            DrawTextureEx(horizonTexture, (Vector2){scrollIndex, FLOOR_Y_POS}, 0.0f, 1.0f, WHITE);
+            DrawTextureEx(horizonTexture, (Vector2){scrollIndex + horizonTexture.width, FLOOR_Y_POS}, 0.0f, 1.0f, WHITE);
+            DrawText(TextFormat("FPS: %i", GetFPS()), 10, 10, 20, BLACK);
+            //----------------------------------------------------------------------------------
+        }
+
+        if (gameState == GAMEOVER)
+        {
+        }
 
         // Draw
         //----------------------------------------------------------------------------------
         BeginDrawing();
-        ClearBackground(RAYWHITE);
-        DrawText(TextFormat("%02i FPS", GetFPS()), 575, 210, 50, PINK);
-        DrawTextureRec((Texture2D)spriteComponents[dinoId].texture, (Rectangle)spriteComponents[dinoId].sourceRec, (Vector2){positionComponents[dinoId].x, positionComponents[dinoId].y}, WHITE);
-        DrawText(TextFormat("Dino X: %i", (int)positionComponents[dinoId].x), 575, 10, 20, PINK);
-        DrawText(TextFormat("Dino Y: %i", (int)positionComponents[dinoId].y), 575, 30, 20, PINK);
-        DrawText(TextFormat("Is Jumping: %s", dinoComponents[dinoId].isJumping ? "true" : "false"), 575, 70, 20, PINK);
-        DrawText(TextFormat("Is Crouching: %s", dinoComponents[dinoId].isDucking ? "true" : "false"), 575, 90, 20, PINK);
-        DrawText(TextFormat("Animation Slice: %i %i", animationComponents[dinoId].frameIndexSlice[0], animationComponents[dinoId].frameIndexSlice[1]), 575, 130, 20, PINK);
-        DrawText(TextFormat("Current Frame: %i", animationComponents[dinoId].currentFrameIndex), 575, 150, 20, PINK);
-        DrawText(TextFormat("Frame Counter: %i", animationComponents[dinoId].framesCounter), 575, 170, 20, PINK);
-        // y velocity
-        DrawText(TextFormat("Velocity Y: %f", velocityComponents[dinoId].y), 475, 200, 20, PINK);
+        ClearBackground(RAYWHITE); // y velocity
+        DrawSpriteSystem(entities);
         EndDrawing();
         //----------------------------------------------------------------------------------
     }
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
-    UnloadTexture(dinoTexture); // Unload dinoTexture
-    CloseWindow();              // Close window and OpenGL context
+    UnloadTexture(dinoTexture);        // Unload dinoTexture
+    UnloadTexture(horizonTexture);     // Unload horizonTexture
+    UnloadTexture(pterodactylTexture); // Unload pterodactylTexture
+    UnloadTexture(restartTexture);     // Unload restartTexture
+    UnloadTexture(cactusLargeTexture); // Unload cactusLargeTexture
+    UnloadTexture(cactusSmallTexture); // Unload cactusSmallTexture
+    UnloadTexture(cloudTexture);       // Unload cloudTexture
+
+    CloseWindow(); // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
 
     return 0;
@@ -341,7 +398,7 @@ void UpdateDinoPoseSystem(Entity *entities)
             continue;
         if (!HasComponent(entities, i, POSITION))
             continue;
-        dinoComponents[i].isJumping = IsJumping(positionComponents[i].y, dinoComponents[i].isJumping);
+        dinoComponents[i].isJumping = IsJumping(positionComponents[i].y);
         dinoComponents[i].isDucking = IsDucking(positionComponents[i].y);
     }
 }
@@ -362,6 +419,10 @@ void UpdateDinoPositionSystem(Entity *entities)
         {
             positionComponents[i].y = FLOOR_Y_POS;
         }
+        if (positionComponents[i].x > WIDTH / 2)
+        {
+            positionComponents[i].x = WIDTH / 2;
+        }
     }
 }
 
@@ -375,18 +436,33 @@ void UpdateDinoVelocitySystem(Entity *entities)
             continue;
         if (!HasComponent(entities, i, POSITION))
             continue;
-        if (positionComponents[i].y >= FLOOR_Y_POS && !dinoComponents[i].isJumping)
+        if (!dinoComponents[i].isJumping)
         {
             velocityComponents[i].y = 0;
             dinoComponents[i].jumpFrameCount = 0;
-            dinoComponents[i].jumpVelocity = INITIAL_JUMP_VELOCITY;
         }
         else
         {
-            // TODO
-            float speed = (dinoComponents[i].jumpFrameCount - 3 * MIN_FRAME_SPEED);
-            velocityComponents[i].y = speed * speed;
+            velocityComponents[i].y =
+                (INITIAL_JUMP_VELOCITY - DROP_VELOCITY) /
+                    pow((INITIAL_JUMP_VELOCITY - 2 * MIN_FRAME_SPEED), 2) *
+                    pow((dinoComponents[i].jumpFrameCount - 2 * MIN_FRAME_SPEED), 2) +
+                DROP_VELOCITY;
             dinoComponents[i].jumpFrameCount++;
+        }
+
+        if (positionComponents[i].x < DINO_PLAY_X_POS && positionComponents[i].y == FLOOR_Y_POS)
+        {
+            velocityComponents[i].x =
+                -sin(PI *
+                     ((positionComponents[i].x -
+                       (DINO_START_X_POS + DINO_PLAY_X_POS) / 2) /
+                      (DINO_PLAY_X_POS - DINO_START_X_POS)));
+        }
+        else
+        {
+            velocityComponents[i].x = 0;
+            dinoComponents[i].slideFrameCount = 0;
         }
     }
 }
@@ -423,29 +499,33 @@ void UpdateCurrentFrameIndexSystem(Entity *entities)
     }
 }
 
+void DrawSpriteSystem(Entity *entities)
+{
+    for (int i = 0; i < nextEntityId; i++)
+    {
+        if ((entities[i].componentMask & SPRITE) != SPRITE)
+            continue;
+        if ((entities[i].componentMask & POSITION) != POSITION)
+            continue;
+        DrawTextureRec(spriteComponents[i].texture, spriteComponents[i].sourceRec, (Vector2){positionComponents[i].x, positionComponents[i].y}, WHITE);
+    }
+}
+
 // ----------------------------------------------------------------------------------
 
 // Helper Functions Definition
 // ----------------------------------------------------------------------------------
-bool IsJumping(float dinoY, bool isJumping)
+bool IsJumping(float y)
 {
-    if (dinoY <= JUMP_Y_POS)
-    {
-        return false;
-    }
-    if (isJumping)
-    {
-        return true;
-    }
-    if (dinoY != FLOOR_Y_POS)
-    {
-        return false;
-    }
     if (IsKeyPressed(KEY_SPACE))
     {
         return true;
     }
     if (IsKeyPressed(KEY_UP))
+    {
+        return true;
+    }
+    if (y < FLOOR_Y_POS)
     {
         return true;
     }
