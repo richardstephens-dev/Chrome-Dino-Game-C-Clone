@@ -274,16 +274,13 @@ int main(void)
     float scrollMultiplier = 1;
     float scrollIndex = 0;
 
-    SetTargetFPS(60); // Set our game to run at 60 frames-per-second
+    SetTargetFPS(60);
     //--------------------------------------------------------------------------------------
 
     // Main game loop
     //--------------------------------------------------------------------------------------
-    while (!WindowShouldClose()) // Detect window close button or ESC key
+    while (!WindowShouldClose())
     {
-        // check game state
-
-        // menu state
         if (gameState == MENU)
         {
             if (IsKeyPressed(KEY_ENTER))
@@ -322,8 +319,6 @@ int main(void)
 
             // Temporary / Testing / Debug
             //----------------------------------------------------------------------------------
-            DrawTextureEx(horizonTexture, (Vector2){scrollIndex, FLOOR_Y_POS + TREX_SPRITES_HEIGHT - 40}, 0.0f, 1.0f, WHITE);
-            DrawTextureEx(horizonTexture, (Vector2){scrollIndex + horizonTexture.width, FLOOR_Y_POS + TREX_SPRITES_HEIGHT - 40}, 0.0f, 1.0f, WHITE);
             DrawText(TextFormat("FPS: %i", GetFPS()), 400, 10, 20, BLACK);
             // top right corner draw framecounter as score:
             DrawText(TextFormat("%i", score), 10, 10, 20, BLACK);
@@ -337,21 +332,23 @@ int main(void)
         // Draw
         //----------------------------------------------------------------------------------
         BeginDrawing();
-        ClearBackground(RAYWHITE); // y velocity
+        ClearBackground(RAYWHITE);
         DrawSpriteSystem(entities);
+        DrawTextureEx(horizonTexture, (Vector2){scrollIndex, FLOOR_Y_POS + TREX_SPRITES_HEIGHT - 40}, 0.0f, 1.0f, WHITE);
+        DrawTextureEx(horizonTexture, (Vector2){scrollIndex + horizonTexture.width, FLOOR_Y_POS + TREX_SPRITES_HEIGHT - 40}, 0.0f, 1.0f, WHITE);
         EndDrawing();
         //----------------------------------------------------------------------------------
     }
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
-    UnloadTexture(dinoTexture);        // Unload dinoTexture
-    UnloadTexture(horizonTexture);     // Unload horizonTexture
-    UnloadTexture(pterodactylTexture); // Unload pterodactylTexture
-    UnloadTexture(restartTexture);     // Unload restartTexture
-    UnloadTexture(cactusLargeTexture); // Unload cactusLargeTexture
-    UnloadTexture(cactusSmallTexture); // Unload cactusSmallTexture
-    UnloadTexture(cloudTexture);       // Unload cloudTexture
+    UnloadTexture(dinoTexture);
+    UnloadTexture(horizonTexture);
+    UnloadTexture(pterodactylTexture);
+    UnloadTexture(restartTexture);
+    UnloadTexture(cactusLargeTexture);
+    UnloadTexture(cactusSmallTexture);
+    UnloadTexture(cloudTexture);
 
     CloseWindow(); // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
