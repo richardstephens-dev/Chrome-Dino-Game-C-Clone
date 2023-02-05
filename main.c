@@ -24,7 +24,7 @@
 #include <math.h>
 //----------------------------------------------------------------------------------
 
-// Local Variables Definition (local to this module)
+// Local Variables Definition
 //----------------------------------------------------------------------------------
 #define MAX_ENTITIES 99
 const int MAX_FRAME_SPEED = 99;
@@ -103,7 +103,8 @@ enum ComponentsEnum
     ANIMATION = 0b00010000,
     DINO = 0b00100000,
     COLLISION = 0b01000000,
-    OBSTACLE = 0b10000000
+    OBSTACLE = 0b10000000,
+    CLOUD = 0b100000000,
 };
 
 enum GameState
@@ -117,9 +118,8 @@ enum GameState
 int nextEntityId = 0;
 //----------------------------------------------------------------------------------
 
-// Entity Component System: typedefs
+// Entity Component System
 // ----------------------------------------------------------------------------------
-// everything except GUI should go in here
 typedef struct SizeComponent
 {
     int width, height;
@@ -176,6 +176,12 @@ typedef struct ObstacleComponent
 } ObstacleComponent;
 ObstacleComponent obstacleComponents[MAX_ENTITIES];
 
+typedef struct CloudComponent
+{
+    int xIndex, yIndex;
+} CloudComponent;
+CloudComponent cloudComponents[MAX_ENTITIES];
+
 typedef struct Entity
 {
     int id;
@@ -195,7 +201,9 @@ void UpdateFrameCounterSystem(Entity *entities);
 void UpdateCurrentFrameIndexSystem(Entity *entities);
 bool IsDucking(int posY);
 bool HasComponent(Entity *entities, int id, int component);
+void AddComponent(Entity *entities, int id, int component);
 void DrawSpriteSystem(Entity *entities);
+void UpdateCloudSystem(Entity *entities);
 
 //----------------------------------------------------------------------------------
 
@@ -212,6 +220,11 @@ bool HasComponent(Entity *entities, int id, int component)
     return entities[id].componentMask & component;
 }
 
+void AddComponent(Entity *entities, int id, int component)
+{
+    entities[id].componentMask |= component;
+}
+
 // ----------------------------------------------------------------------------------
 
 // Main entry point
@@ -220,7 +233,6 @@ int main(void)
 {
     // Initialization
     //--------------------------------------------------------------------------------------
-    // TODO: adjust dimensions on resize
     InitWindow(WIDTH, HEIGHT, "Dino Game");
     int gameState = MENU;
 
@@ -255,13 +267,13 @@ int main(void)
     Entity entities[MAX_ENTITIES];
     int dinoId = nextEntityId;
     entities[dinoId] = CreateEntity();
-    entities[dinoId].componentMask |= SIZE;
-    entities[dinoId].componentMask |= POSITION;
-    entities[dinoId].componentMask |= VELOCITY;
-    entities[dinoId].componentMask |= SPRITE;
-    entities[dinoId].componentMask |= ANIMATION;
-    entities[dinoId].componentMask |= DINO;
-    entities[dinoId].componentMask |= COLLISION;
+    AddComponent(entities, dinoId, SIZE);
+    AddComponent(entities, dinoId, POSITION);
+    AddComponent(entities, dinoId, VELOCITY);
+    AddComponent(entities, dinoId, SPRITE);
+    AddComponent(entities, dinoId, ANIMATION);
+    AddComponent(entities, dinoId, DINO);
+    AddComponent(entities, dinoId, COLLISION);
     sizeComponents[dinoId] = (SizeComponent){dinoTexture.width / 6, dinoTexture.height};
     positionComponents[dinoId] = (PositionComponent){DINO_START_X_POS, FLOOR_Y_POS};
     velocityComponents[dinoId] = (VelocityComponent){0.0f, 0.0f};
@@ -269,6 +281,25 @@ int main(void)
     animationComponents[dinoId] = (AnimationComponent){0, {2, 3}, 8, 0};
     dinoComponents[dinoId] = (DinoComponent){false, false, false, 0, 0};
     collisionComponents[dinoId] = (CollisionComponent){(Rectangle){positionComponents[dinoId].x, positionComponents[dinoId].y, sizeComponents[dinoId].width, sizeComponents[dinoId].height}};
+
+    for (int i = 0; i < MAX_CLOUDS; i++)
+    {
+        int cloudId = nextEntityId;
+        entities[cloudId] = CreateEntity();
+        AddComponent(entities, cloudId, POSITION);
+        AddComponent(entities, cloudId, VELOCITY);
+        AddComponent(entities, cloudId, SPRITE);
+        AddComponent(entities, cloudId, CLOUD);
+        velocityComponents[cloudId].x = -GetRandomValue(1, 1.5);
+        velocityComponents[cloudId].y = 0;
+        spriteComponents[cloudId].texture = cloudTexture;
+        spriteComponents[cloudId].sourceRec = (Rectangle){0, 0, (float)cloudTexture.width, (float)cloudTexture.height};
+        cloudComponents[cloudId].xIndex = i;
+        cloudComponents[cloudId].yIndex = i;
+        positionComponents[cloudId].x = i * cloudTexture.width + GetRandomValue(0, WIDTH * MAX_CLOUDS / 2);
+        positionComponents[cloudId].y = i * (cloudTexture.height + 10);
+    }
+
     int frameCounter = 0;
     int score = 0;
     float scrollMultiplier = 1;
@@ -299,6 +330,7 @@ int main(void)
             UpdateDinoVelocitySystem(entities);
             UpdateFrameCounterSystem(entities);
             UpdateCurrentFrameIndexSystem(entities);
+            UpdateCloudSystem(entities);
             //----------------------------------------------------------------------------------
 
             // Update game variables
@@ -320,7 +352,6 @@ int main(void)
             // Temporary / Testing / Debug
             //----------------------------------------------------------------------------------
             DrawText(TextFormat("FPS: %i", GetFPS()), 400, 10, 20, BLACK);
-            // top right corner draw framecounter as score:
             DrawText(TextFormat("%i", score), 10, 10, 20, BLACK);
             //----------------------------------------------------------------------------------
         }
@@ -333,9 +364,9 @@ int main(void)
         //----------------------------------------------------------------------------------
         BeginDrawing();
         ClearBackground(RAYWHITE);
+        DrawTextureEx(horizonTexture, (Vector2){scrollIndex, FLOOR_Y_POS + TREX_SPRITES_HEIGHT - 38}, 0.0f, 1.0f, WHITE);
+        DrawTextureEx(horizonTexture, (Vector2){scrollIndex + horizonTexture.width, FLOOR_Y_POS + TREX_SPRITES_HEIGHT - 38}, 0.0f, 1.0f, WHITE);
         DrawSpriteSystem(entities);
-        DrawTextureEx(horizonTexture, (Vector2){scrollIndex, FLOOR_Y_POS + TREX_SPRITES_HEIGHT - 40}, 0.0f, 1.0f, WHITE);
-        DrawTextureEx(horizonTexture, (Vector2){scrollIndex + horizonTexture.width, FLOOR_Y_POS + TREX_SPRITES_HEIGHT - 40}, 0.0f, 1.0f, WHITE);
         EndDrawing();
         //----------------------------------------------------------------------------------
     }
@@ -390,8 +421,6 @@ void UpdateDinoAnimationSystem(Entity *entities)
             animationComponents[i].frameIndexSlice[0] = 2;
             animationComponents[i].frameIndexSlice[1] = 3;
         }
-
-        // TODO: Dino X at start of game should move to the right
     }
 }
 
@@ -506,13 +535,32 @@ void UpdateCurrentFrameIndexSystem(Entity *entities)
 
 void DrawSpriteSystem(Entity *entities)
 {
-    for (int i = 0; i < nextEntityId; i++)
+    for (int i = nextEntityId - 1; i >= 0; i--)
     {
-        if ((entities[i].componentMask & SPRITE) != SPRITE)
+        if (!HasComponent(entities, i, SPRITE))
             continue;
-        if ((entities[i].componentMask & POSITION) != POSITION)
+        if (!HasComponent(entities, i, POSITION))
             continue;
         DrawTextureRec(spriteComponents[i].texture, spriteComponents[i].sourceRec, (Vector2){positionComponents[i].x, positionComponents[i].y}, WHITE);
+    }
+}
+
+void UpdateCloudSystem(Entity *entities)
+{
+    for (int i = 0; i < nextEntityId; i++)
+    {
+        if (!HasComponent(entities, i, CLOUD))
+            continue;
+        if (!HasComponent(entities, i, POSITION))
+            continue;
+        if (!HasComponent(entities, i, VELOCITY))
+            continue;
+        positionComponents[i].x += velocityComponents[i].x;
+        if (positionComponents[i].x < -spriteComponents[i].sourceRec.width)
+        {
+            velocityComponents[i].x = GetRandomValue(1, 1.5);
+            positionComponents[i].x = GetRandomValue(WIDTH, WIDTH * MAX_CLOUDS);
+        }
     }
 }
 
