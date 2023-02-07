@@ -93,7 +93,7 @@ const float INITIAL_JUMP_VELOCITY = -24.0f;
 const float DROP_VELOCITY = 12.0f;
 const float DINO_START_X_POS = 250.0f;
 const float DINO_PLAY_X_POS = WIDTH / 2 + TREX_SPRITES_WIDTH;
-const float MAX_OBSTACLES = 6;
+const int MAX_OBSTACLES = 4;
 
 enum ComponentsEnum
 {
@@ -181,6 +181,7 @@ CollisionComponent collisionComponents[MAX_ENTITIES];
 typedef struct ObstacleComponent
 {
     int type;
+    int xIndex;
 } ObstacleComponent;
 ObstacleComponent obstacleComponents[MAX_ENTITIES];
 
@@ -202,6 +203,7 @@ typedef struct Entity
 Entity CreateEntity();
 bool HasComponent(Entity *entities, int id, int component);
 void AddComponent(Entity *entities, int id, int component);
+void RemoveComponent(Entity *entities, int id, int component);
 
 void UpdateDinoAnimationSystem(Entity *entities);
 void UpdateDinoPoseSystem(Entity *entities);
@@ -213,12 +215,17 @@ void UpdateCloudVelocity(int i, float scrollMultiplier);
 void UpdateObstacleVelocity(int i, float scrollMultiplier);
 void UpdateDinoPosition(int i);
 void UpdateCloudPosition(int i);
+void UpdateObstaclePosition(int i);
 void UpdateFrameCounterSystem(Entity *entities);
 void UpdateCurrentFrameIndexSystem(Entity *entities);
+void UpdateObstacleType(Entity *entities, int i, Texture2D cactusLargeTexture, Texture2D cactusSmallTexture, Texture2D pterodactylTexture);
+void UpdateObstacleTypeSystem(Entity *entities, Texture2D cactusLargeTexture, Texture2D cactusSmallTexture, Texture2D pterodactylTexture);
+void UpdateCollisionSystem(Entity *entities);
 
 bool IsJumping(float y);
 bool IsDucking(int posY);
-
+bool IsColliding(Rectangle rec1, Rectangle rec2);
+void InitObstacle(Entity *entities, int i, Texture2D cactusLargeTexture, Texture2D cactusSmallTexture, Texture2D pterodactylTexture);
 //----------------------------------------------------------------------------------
 
 // Entity Component System: Functions
@@ -237,6 +244,11 @@ bool HasComponent(Entity *entities, int id, int component)
 void AddComponent(Entity *entities, int id, int component)
 {
     entities[id].componentMask |= component;
+}
+
+void RemoveComponent(Entity *entities, int id, int component)
+{
+    entities[id].componentMask &= ~component;
 }
 
 // ----------------------------------------------------------------------------------
@@ -278,6 +290,10 @@ int main(void)
     Texture2D cloudTexture = LoadTextureFromImage(cloudImage);
     UnloadImage(cloudImage);
 
+    Image gameOverImage = LoadImage("resources/gameover.png");
+    Texture2D gameOverTexture = LoadTextureFromImage(gameOverImage);
+    UnloadImage(gameOverImage);
+
     Entity entities[MAX_ENTITIES];
     int dinoId = nextEntityId;
     entities[dinoId] = CreateEntity();
@@ -306,46 +322,7 @@ int main(void)
         AddComponent(entities, obstacleId, OBSTACLE);
         AddComponent(entities, obstacleId, COLLISION);
         AddComponent(entities, obstacleId, SIZE);
-
-        int obstacleType = GetRandomValue(0, 2);
-        switch (obstacleType)
-        {
-        case CACTUS_LARGE:
-            spriteComponents[obstacleId].texture = cactusLargeTexture;
-            spriteComponents[obstacleId].sourceRec = (Rectangle){0, 0, (float)cactusLargeTexture.width, (float)cactusLargeTexture.height};
-            sizeComponents[obstacleId] = (SizeComponent){cactusLargeTexture.width, cactusLargeTexture.height};
-            velocityComponents[obstacleId].x = 0;
-            velocityComponents[obstacleId].y = 0;
-            positionComponents[obstacleId].x = i * cactusLargeTexture.width + GetRandomValue(0, WIDTH * MAX_OBSTACLES / 2);
-            positionComponents[obstacleId].y = FLOOR_Y_POS;
-            collisionComponents[obstacleId].collisionRec = (Rectangle){positionComponents[obstacleId].x, positionComponents[obstacleId].y, sizeComponents[obstacleId].width, sizeComponents[obstacleId].height};
-            obstacleComponents[obstacleId] = (ObstacleComponent){CACTUS_LARGE};
-            break;
-        case CACTUS_SMALL:
-            spriteComponents[obstacleId].texture = cactusSmallTexture;
-            spriteComponents[obstacleId].sourceRec = (Rectangle){0, 0, (float)cactusSmallTexture.width, (float)cactusSmallTexture.height};
-            sizeComponents[obstacleId] = (SizeComponent){cactusSmallTexture.width, cactusSmallTexture.height};
-            velocityComponents[obstacleId].x = 0;
-            velocityComponents[obstacleId].y = 0;
-            positionComponents[obstacleId].x = i * cactusSmallTexture.width + GetRandomValue(0, WIDTH * MAX_OBSTACLES / 2);
-            positionComponents[obstacleId].y = FLOOR_Y_POS;
-            collisionComponents[obstacleId].collisionRec = (Rectangle){positionComponents[obstacleId].x, positionComponents[obstacleId].y, sizeComponents[obstacleId].width, sizeComponents[obstacleId].height};
-            obstacleComponents[obstacleId] = (ObstacleComponent){CACTUS_SMALL};
-            break;
-        case PTERODACTYL:
-            AddComponent(entities, obstacleId, ANIMATION);
-            animationComponents[obstacleId] = (AnimationComponent){0, {0, 1}, 3, 0};
-            spriteComponents[obstacleId].texture = pterodactylTexture;
-            spriteComponents[obstacleId].sourceRec = (Rectangle){0, 0, (float)pterodactylTexture.width / 2, (float)pterodactylTexture.height};
-            sizeComponents[obstacleId] = (SizeComponent){pterodactylTexture.width / 2, pterodactylTexture.height};
-            velocityComponents[obstacleId].x = 0;
-            velocityComponents[obstacleId].y = 0;
-            positionComponents[obstacleId].x = i * pterodactylTexture.width + GetRandomValue(0, WIDTH * MAX_OBSTACLES / 2);
-            positionComponents[obstacleId].y = FLOOR_Y_POS - pterodactylTexture.height;
-            collisionComponents[obstacleId].collisionRec = (Rectangle){positionComponents[obstacleId].x, positionComponents[obstacleId].y, sizeComponents[obstacleId].width, sizeComponents[obstacleId].height};
-            obstacleComponents[obstacleId] = (ObstacleComponent){PTERODACTYL};
-            break;
-        }
+        InitObstacle(entities, obstacleId, cactusLargeTexture, cactusSmallTexture, pterodactylTexture);
     }
 
     for (int i = 0; i < MAX_CLOUDS; i++)
@@ -394,15 +371,17 @@ int main(void)
             UpdatePositionSystem(entities);
             UpdateDinoPoseSystem(entities);
             UpdateVelocitySystem(entities, scrollMultiplier);
+            UpdateObstacleTypeSystem(entities, cactusLargeTexture, cactusSmallTexture, pterodactylTexture);
             UpdateFrameCounterSystem(entities);
             UpdateCurrentFrameIndexSystem(entities);
+            UpdateCollisionSystem(entities);
             //----------------------------------------------------------------------------------
 
             // Update game variables
             //----------------------------------------------------------------------------------
             frameCounter++;
             scrollIndex -= 2.5f * scrollMultiplier;
-            scrollMultiplier *= 1.0001f;
+            scrollMultiplier *= 1.00015f;
             if (scrollIndex <= -horizonTexture.width)
             {
                 scrollIndex = 0;
@@ -410,6 +389,11 @@ int main(void)
             if (frameCounter % 10 == 0)
             {
                 score += 1 * scrollMultiplier;
+            }
+
+            if (dinoComponents[dinoId].isDead)
+            {
+                gameState = GAMEOVER;
             }
 
             //----------------------------------------------------------------------------------
@@ -423,6 +407,7 @@ int main(void)
 
         if (gameState == GAMEOVER)
         {
+            DrawTexture(gameOverTexture, (WIDTH - gameOverTexture.width) / 2, (HEIGHT - gameOverTexture.height) / 2, WHITE);
         }
 
         // Draw
@@ -445,6 +430,7 @@ int main(void)
     UnloadTexture(cactusLargeTexture);
     UnloadTexture(cactusSmallTexture);
     UnloadTexture(cloudTexture);
+    UnloadTexture(gameOverTexture);
 
     CloseWindow(); // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
@@ -522,6 +508,11 @@ void UpdatePositionSystem(Entity *entities)
         if (HasComponent(entities, i, CLOUD))
         {
             UpdateCloudPosition(i);
+        }
+
+        if (HasComponent(entities, i, OBSTACLE))
+        {
+            UpdateObstaclePosition(i);
         }
     }
 }
@@ -658,6 +649,64 @@ void UpdateDinoPosition(int i)
     }
 }
 
+void UpdateObstaclePosition(int i)
+{
+    if (positionComponents[i].x < -spriteComponents[i].sourceRec.width)
+    {
+        positionComponents[i].x = obstacleComponents[i].xIndex * WIDTH / 2 + WIDTH;
+    }
+}
+
+void UpdateObstacleTypeSystem(Entity *entities, Texture2D cactusLargeTexture, Texture2D cactusSmallTexture, Texture2D pterodactylTexture)
+{
+    for (int i = 0; i < nextEntityId; i++)
+    {
+        if (HasComponent(entities, i, OBSTACLE))
+        {
+            DrawText(TextFormat("Next obstacle: %d", obstacleComponents[i].type), 10, 30 * i, 20, BLACK);
+            UpdateObstacleType(entities, i, cactusLargeTexture, cactusSmallTexture, pterodactylTexture);
+        }
+    }
+}
+
+void UpdateObstacleType(Entity *entities, int i, Texture2D cactusLargeTexture, Texture2D cactusSmallTexture, Texture2D pterodactylTexture)
+{
+    if (positionComponents[i].x < -spriteComponents[i].sourceRec.width)
+    {
+        InitObstacle(entities, i, cactusLargeTexture, cactusSmallTexture, pterodactylTexture);
+    }
+}
+
+void UpdateCollisionSystem(Entity *entities)
+{
+    for (int i = 0; i < nextEntityId; i++)
+    {
+        if (!HasComponent(entities, i, COLLISION))
+            continue;
+        if (!HasComponent(entities, i, POSITION))
+            continue;
+        if (!HasComponent(entities, i, OBSTACLE))
+            continue;
+        collisionComponents[i].collisionRec.x = positionComponents[i].x;
+        collisionComponents[i].collisionRec.y = positionComponents[i].y;
+        collisionComponents[i].collisionRec.width = spriteComponents[i].sourceRec.width;
+        collisionComponents[i].collisionRec.height = spriteComponents[i].sourceRec.height;
+        for (int j = 0; j < nextEntityId; j++)
+        {
+            if (!HasComponent(entities, j, DINO))
+                continue;
+            collisionComponents[j].collisionRec.x = positionComponents[j].x;
+            collisionComponents[j].collisionRec.y = positionComponents[j].y;
+            collisionComponents[j].collisionRec.width = spriteComponents[j].sourceRec.width;
+            collisionComponents[j].collisionRec.height = spriteComponents[j].sourceRec.height;
+            if (HasComponent(entities, j, DINO) && IsColliding(collisionComponents[i].collisionRec, collisionComponents[j].collisionRec))
+            {
+                dinoComponents[j].isDead = true;
+                break;
+            }
+        }
+    }
+}
 // ----------------------------------------------------------------------------------
 
 // Helper Functions Definition
@@ -699,6 +748,46 @@ bool IsColliding(Rectangle rec1, Rectangle rec2)
         return true;
     }
     return false;
+}
+
+void InitObstacle(Entity *entities, int i, Texture2D cactusLargeTexture, Texture2D cactusSmallTexture, Texture2D pterodactylTexture)
+{
+    int obstacleType = GetRandomValue(0, 2);
+    obstacleComponents[i].type = obstacleType;
+    obstacleComponents[i].xIndex = i;
+    velocityComponents[i].x = 0;
+    velocityComponents[i].y = 0;
+
+    switch (obstacleType)
+    {
+    case CACTUS_LARGE:
+        RemoveComponent(entities, i, ANIMATION);
+        spriteComponents[i].texture = cactusLargeTexture;
+        spriteComponents[i].sourceRec = (Rectangle){0, 0, (float)cactusLargeTexture.width, (float)cactusLargeTexture.height};
+        sizeComponents[i] = (SizeComponent){cactusLargeTexture.width, cactusLargeTexture.height};
+        positionComponents[i].y = FLOOR_Y_POS - 15;
+        obstacleComponents[i] = (ObstacleComponent){CACTUS_LARGE};
+        break;
+    case CACTUS_SMALL:
+        RemoveComponent(entities, i, ANIMATION);
+        spriteComponents[i].texture = cactusSmallTexture;
+        spriteComponents[i].sourceRec = (Rectangle){0, 0, (float)cactusSmallTexture.width, (float)cactusSmallTexture.height};
+        sizeComponents[i] = (SizeComponent){cactusSmallTexture.width, cactusSmallTexture.height};
+        positionComponents[i].y = FLOOR_Y_POS + 10;
+        obstacleComponents[i] = (ObstacleComponent){CACTUS_SMALL};
+        break;
+    case PTERODACTYL:
+        AddComponent(entities, i, ANIMATION);
+        animationComponents[i] = (AnimationComponent){0, {0, 1}, 3, 0};
+        spriteComponents[i].texture = pterodactylTexture;
+        spriteComponents[i].sourceRec = (Rectangle){0, 0, (float)pterodactylTexture.width / 2, (float)pterodactylTexture.height};
+        sizeComponents[i] = (SizeComponent){pterodactylTexture.width / 2, pterodactylTexture.height};
+        positionComponents[i].y = FLOOR_Y_POS - pterodactylTexture.height;
+        obstacleComponents[i] = (ObstacleComponent){PTERODACTYL};
+        break;
+    }
+    collisionComponents[i].collisionRec = (Rectangle){positionComponents[i].x, positionComponents[i].y, sizeComponents[i].width, sizeComponents[i].height};
+    positionComponents[i].x = i * WIDTH / 2 + spriteComponents[i].sourceRec.width;
 }
 // ----------------------------------------------------------------------------------
 
