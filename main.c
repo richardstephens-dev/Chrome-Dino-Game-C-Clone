@@ -221,31 +221,6 @@ bool IsColliding(Rectangle rec1, Rectangle rec2);
 bool IsOutOfBounds(int i);
 //----------------------------------------------------------------------------------
 
-// Entity Component System: Functions
-// ----------------------------------------------------------------------------------
-Entity CreateEntity()
-{
-    Entity e = {nextEntityId++, 0};
-    return e;
-}
-
-bool HasComponent(Entity *entities, int id, int component)
-{
-    return entities[id].componentMask & component;
-}
-
-void AddComponent(Entity *entities, int id, int component)
-{
-    entities[id].componentMask |= component;
-}
-
-void RemoveComponent(Entity *entities, int id, int component)
-{
-    entities[id].componentMask &= ~component;
-}
-
-// ----------------------------------------------------------------------------------
-
 // Main entry point
 //----------------------------------------------------------------------------------
 int main(void)
@@ -381,7 +356,7 @@ int main(void)
             //----------------------------------------------------------------------------------
             frameCounter++;
             scrollIndex -= 2.5f * scrollMultiplier;
-            scrollMultiplier *= 1.00015f;
+            scrollMultiplier *= 1.0005f;
             if (scrollIndex <= -horizonTexture.width)
             {
                 scrollIndex = 0;
@@ -408,6 +383,7 @@ int main(void)
         if (gameState == GAMEOVER)
         {
             DrawTexture(gameOverTexture, (WIDTH - gameOverTexture.width) / 2, (HEIGHT - gameOverTexture.height) / 2, WHITE);
+            DrawText(TextFormat("%i", score), 10, 10, 20, BLACK);
         }
 
         // Draw
@@ -810,10 +786,28 @@ bool IsOutOfBounds(int i)
     }
     return false;
 }
-
 // ----------------------------------------------------------------------------------
 
-// Utils
+// Entity Component System: Functions
 // ----------------------------------------------------------------------------------
+Entity CreateEntity()
+{
+    Entity e = {nextEntityId++, 0};
+    return e;
+}
 
+bool HasComponent(Entity *entities, int id, int component)
+{
+    return entities[id].componentMask & component;
+}
+
+void AddComponent(Entity *entities, int id, int component)
+{
+    entities[id].componentMask |= component;
+}
+
+void RemoveComponent(Entity *entities, int id, int component)
+{
+    entities[id].componentMask &= ~component;
+}
 // ----------------------------------------------------------------------------------
