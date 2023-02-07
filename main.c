@@ -46,8 +46,8 @@ const int MAX_OBSTACLE_LENGTH = 3;
 const int MAX_OBSTACLE_DUPLICATION = 2;
 const int MAX_SPEED = 13;
 const int SPEED = 6;
-const int HEIGHT = 480;
-const int WIDTH = 800;
+const int HEIGHT = 600;
+const int WIDTH = 1280;
 const int TREX_SPRITES_WIDTH = 88;
 const int TREX_SPRITES_HEIGHT = 94;
 const int TREX_SPRITES_WIDTH_DUCK = 88;
@@ -87,7 +87,7 @@ const int JUMP_KEY = 38;
 const int JUMP_KEY_ALT = 32;
 const int DUCK_KEY = 40;
 const int RESTART_KEY = 13;
-const float FLOOR_Y_POS = 280.0f;
+const float FLOOR_Y_POS = 0.8f * HEIGHT;
 const float JUMP_Y_POS = 100.0f;
 const float INITIAL_JUMP_VELOCITY = -24.0f;
 const float DROP_VELOCITY = 12.0f;
@@ -211,6 +211,8 @@ void DrawSpriteSystem(Entity *entities);
 void UpdateDinoVelocity(int i, float scrollMultiplier);
 void UpdateCloudVelocity(int i, float scrollMultiplier);
 void UpdateObstacleVelocity(int i, float scrollMultiplier);
+void UpdateDinoPosition(int i);
+void UpdateCloudPosition(int i);
 void UpdateFrameCounterSystem(Entity *entities);
 void UpdateCurrentFrameIndexSystem(Entity *entities);
 
@@ -508,18 +510,18 @@ void UpdatePositionSystem(Entity *entities)
             continue;
         if (!HasComponent(entities, i, VELOCITY))
             continue;
+
         positionComponents[i].x += velocityComponents[i].x;
         positionComponents[i].y += velocityComponents[i].y;
 
-        if (!HasComponent(entities, i, DINO))
-            continue;
-        if (positionComponents[i].y > FLOOR_Y_POS)
+        if (HasComponent(entities, i, DINO))
         {
-            positionComponents[i].y = FLOOR_Y_POS;
+            UpdateDinoPosition(i);
         }
-        if (positionComponents[i].x > WIDTH / 2)
+
+        if (HasComponent(entities, i, CLOUD))
         {
-            positionComponents[i].x = WIDTH / 2;
+            UpdateCloudPosition(i);
         }
     }
 }
@@ -556,10 +558,11 @@ void UpdateDinoVelocity(int i, float scrollMultiplier)
     }
     else
     {
-        float A = (float)(INITIAL_JUMP_VELOCITY - DROP_VELOCITY) / 4.0f * scrollMultiplier;
-        float f = 0.4f / (float)MIN_FRAME_SPEED;
+        float multiplier = 0.25f * scrollMultiplier;
+        float A = (float)(INITIAL_JUMP_VELOCITY - DROP_VELOCITY) * multiplier;
+        float f = multiplier / (float)MIN_FRAME_SPEED;
         float phi = PI / 2;
-        float t = dinoComponents[i].jumpFrameCount * scrollMultiplier;
+        float t = dinoComponents[i].jumpFrameCount;
         velocityComponents[i].y =
             A *
             sin(2 * PI * f * t + phi);
@@ -627,17 +630,32 @@ void DrawSpriteSystem(Entity *entities)
 
 void UpdateCloudVelocity(int i, float scrollMultiplier)
 {
-    if (positionComponents[i].x < -spriteComponents[i].sourceRec.width)
-    {
-        velocityComponents[i].x = -(1.5f * scrollMultiplier);
-        positionComponents[i].x = GetRandomValue(WIDTH, WIDTH * MAX_CLOUDS);
-    }
+    velocityComponents[i].x = -(1.5f * scrollMultiplier);
 }
 
 void UpdateObstacleVelocity(int i, float scrollMultiplier)
 {
-    // match the scrollMultiplier
     velocityComponents[i].x = -(2.5f * scrollMultiplier);
+}
+
+void UpdateCloudPosition(int i)
+{
+    if (positionComponents[i].x < -spriteComponents[i].sourceRec.width)
+    {
+        positionComponents[i].x = GetRandomValue(WIDTH, WIDTH * MAX_CLOUDS);
+    }
+}
+
+void UpdateDinoPosition(int i)
+{
+    if (positionComponents[i].y > FLOOR_Y_POS)
+    {
+        positionComponents[i].y = FLOOR_Y_POS;
+    }
+    if (positionComponents[i].x > WIDTH / 2)
+    {
+        positionComponents[i].x = WIDTH / 2;
+    }
 }
 
 // ----------------------------------------------------------------------------------
