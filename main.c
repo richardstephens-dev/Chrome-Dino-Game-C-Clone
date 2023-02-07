@@ -763,16 +763,20 @@ void InitObstacle(Entity *entities, int i, Texture2D cactusLargeTexture, Texture
     case CACTUS_LARGE:
         RemoveComponent(entities, i, ANIMATION);
         spriteComponents[i].texture = cactusLargeTexture;
-        spriteComponents[i].sourceRec = (Rectangle){0, 0, (float)cactusLargeTexture.width, (float)cactusLargeTexture.height};
-        sizeComponents[i] = (SizeComponent){cactusLargeTexture.width, cactusLargeTexture.height};
+        int spriteOffsetLargeCactus = GetRandomValue(0, 3);
+        int clusterSizeLargeCactus = GetRandomValue(1, 3);
+        spriteComponents[i].sourceRec = (Rectangle){cactusLargeTexture.width / 6.0f * (float)spriteOffsetLargeCactus, 0, (float)cactusLargeTexture.width / 6.0f * (float)clusterSizeLargeCactus, (float)cactusLargeTexture.height};
+        sizeComponents[i] = (SizeComponent){cactusLargeTexture.width / 6 * clusterSizeLargeCactus, cactusLargeTexture.height};
         positionComponents[i].y = FLOOR_Y_POS - 15;
         obstacleComponents[i] = (ObstacleComponent){CACTUS_LARGE};
         break;
     case CACTUS_SMALL:
         RemoveComponent(entities, i, ANIMATION);
         spriteComponents[i].texture = cactusSmallTexture;
-        spriteComponents[i].sourceRec = (Rectangle){0, 0, (float)cactusSmallTexture.width, (float)cactusSmallTexture.height};
-        sizeComponents[i] = (SizeComponent){cactusSmallTexture.width, cactusSmallTexture.height};
+        int spriteOffsetSmallCactus = GetRandomValue(0, 6);
+        int clusterSizeSmallCactus = GetRandomValue(1, 3);
+        spriteComponents[i].sourceRec = (Rectangle){cactusSmallTexture.width / 6.0f * (float)spriteOffsetSmallCactus, 0, (float)cactusSmallTexture.width / 6.0f * (float)clusterSizeSmallCactus, (float)cactusSmallTexture.height};
+        sizeComponents[i] = (SizeComponent){cactusSmallTexture.width / 6 * clusterSizeSmallCactus, cactusSmallTexture.height};
         positionComponents[i].y = FLOOR_Y_POS + 10;
         obstacleComponents[i] = (ObstacleComponent){CACTUS_SMALL};
         break;
