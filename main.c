@@ -93,6 +93,7 @@ const float INITIAL_JUMP_VELOCITY = -24.0f;
 const float DROP_VELOCITY = 12.0f;
 const float DINO_START_X_POS = 250.0f;
 const float DINO_PLAY_X_POS = WIDTH / 2 + TREX_SPRITES_WIDTH;
+const float MAX_OBSTACLES = 6;
 
 enum ComponentsEnum
 {
@@ -112,6 +113,13 @@ enum GameState
     MENU,
     PLAYING,
     GAMEOVER
+};
+
+enum ObstacleType
+{
+    CACTUS_LARGE,
+    CACTUS_SMALL,
+    PTERODACTYL
 };
 
 // non const/macro variables
@@ -172,7 +180,7 @@ CollisionComponent collisionComponents[MAX_ENTITIES];
 
 typedef struct ObstacleComponent
 {
-    bool isObstacle;
+    int type;
 } ObstacleComponent;
 ObstacleComponent obstacleComponents[MAX_ENTITIES];
 
@@ -191,19 +199,23 @@ typedef struct Entity
 
 // Local Functions Declaration
 //----------------------------------------------------------------------------------
-bool IsJumping(float y);
 Entity CreateEntity();
-void UpdateDinoAnimationSystem(Entity *entities);
-void UpdateDinoPositionSystem(Entity *entities);
-void UpdateDinoPoseSystem(Entity *entities);
-void UpdateDinoVelocitySystem(Entity *entities);
-void UpdateFrameCounterSystem(Entity *entities);
-void UpdateCurrentFrameIndexSystem(Entity *entities);
-bool IsDucking(int posY);
 bool HasComponent(Entity *entities, int id, int component);
 void AddComponent(Entity *entities, int id, int component);
+
+void UpdateDinoAnimationSystem(Entity *entities);
+void UpdateDinoPoseSystem(Entity *entities);
+void UpdatePositionSystem(Entity *entities);
+void UpdateVelocitySystem(Entity *entities);
 void DrawSpriteSystem(Entity *entities);
-void UpdateCloudSystem(Entity *entities);
+void UpdateDinoVelocity(int i);
+void UpdateCloudVelocity(int i);
+void UpdateObstacleVelocity(int i);
+void UpdateFrameCounterSystem(Entity *entities);
+void UpdateCurrentFrameIndexSystem(Entity *entities);
+
+bool IsJumping(float y);
+bool IsDucking(int posY);
 
 //----------------------------------------------------------------------------------
 
@@ -296,8 +308,58 @@ int main(void)
         spriteComponents[cloudId].sourceRec = (Rectangle){0, 0, (float)cloudTexture.width, (float)cloudTexture.height};
         cloudComponents[cloudId].xIndex = i;
         cloudComponents[cloudId].yIndex = i;
-        positionComponents[cloudId].x = i * cloudTexture.width + GetRandomValue(0, WIDTH * MAX_CLOUDS / 2);
-        positionComponents[cloudId].y = i * (cloudTexture.height + 10);
+        positionComponents[cloudId].x = i * (cloudTexture.width + 20) + GetRandomValue(0, MAX_CLOUDS / 2) * WIDTH;
+        positionComponents[cloudId].y = 30 + i * (cloudTexture.height + 20);
+    }
+
+    for (int i = 0; i < MAX_OBSTACLES; i++)
+    {
+        int obstacleId = nextEntityId;
+        entities[obstacleId] = CreateEntity();
+        AddComponent(entities, obstacleId, POSITION);
+        AddComponent(entities, obstacleId, VELOCITY);
+        AddComponent(entities, obstacleId, SPRITE);
+        AddComponent(entities, obstacleId, OBSTACLE);
+        AddComponent(entities, obstacleId, COLLISION);
+        AddComponent(entities, obstacleId, SIZE);
+
+        int obstacleType = GetRandomValue(0, 2);
+        switch (obstacleType)
+        {
+        case CACTUS_LARGE:
+            spriteComponents[obstacleId].texture = cactusLargeTexture;
+            spriteComponents[obstacleId].sourceRec = (Rectangle){0, 0, (float)cactusLargeTexture.width, (float)cactusLargeTexture.height};
+            sizeComponents[obstacleId] = (SizeComponent){cactusLargeTexture.width, cactusLargeTexture.height};
+            velocityComponents[obstacleId].x = -GetRandomValue(1, 1.5);
+            velocityComponents[obstacleId].y = 0;
+            positionComponents[obstacleId].x = i * cactusLargeTexture.width + GetRandomValue(0, WIDTH * MAX_OBSTACLES / 2);
+            positionComponents[obstacleId].y = FLOOR_Y_POS;
+            collisionComponents[obstacleId].collisionRec = (Rectangle){positionComponents[obstacleId].x, positionComponents[obstacleId].y, sizeComponents[obstacleId].width, sizeComponents[obstacleId].height};
+            obstacleComponents[obstacleId] = (ObstacleComponent){CACTUS_LARGE};
+            break;
+        case CACTUS_SMALL:
+            spriteComponents[obstacleId].texture = cactusSmallTexture;
+            spriteComponents[obstacleId].sourceRec = (Rectangle){0, 0, (float)cactusSmallTexture.width, (float)cactusSmallTexture.height};
+            sizeComponents[obstacleId] = (SizeComponent){cactusSmallTexture.width, cactusSmallTexture.height};
+            velocityComponents[obstacleId].x = -GetRandomValue(1, 1.5);
+            velocityComponents[obstacleId].y = 0;
+            positionComponents[obstacleId].x = i * cactusSmallTexture.width + GetRandomValue(0, WIDTH * MAX_OBSTACLES / 2);
+            positionComponents[obstacleId].y = FLOOR_Y_POS;
+            collisionComponents[obstacleId].collisionRec = (Rectangle){positionComponents[obstacleId].x, positionComponents[obstacleId].y, sizeComponents[obstacleId].width, sizeComponents[obstacleId].height};
+            obstacleComponents[obstacleId] = (ObstacleComponent){CACTUS_SMALL};
+            break;
+        case PTERODACTYL:
+            spriteComponents[obstacleId].texture = pterodactylTexture;
+            spriteComponents[obstacleId].sourceRec = (Rectangle){0, 0, (float)pterodactylTexture.width / 2, (float)pterodactylTexture.height};
+            sizeComponents[obstacleId] = (SizeComponent){pterodactylTexture.width / 2, pterodactylTexture.height};
+            velocityComponents[obstacleId].x = -GetRandomValue(1, 1.5);
+            velocityComponents[obstacleId].y = 0;
+            positionComponents[obstacleId].x = i * pterodactylTexture.width + GetRandomValue(0, WIDTH * MAX_OBSTACLES / 2);
+            positionComponents[obstacleId].y = FLOOR_Y_POS - pterodactylTexture.height;
+            collisionComponents[obstacleId].collisionRec = (Rectangle){positionComponents[obstacleId].x, positionComponents[obstacleId].y, sizeComponents[obstacleId].width, sizeComponents[obstacleId].height};
+            obstacleComponents[obstacleId] = (ObstacleComponent){PTERODACTYL};
+            break;
+        }
     }
 
     int frameCounter = 0;
@@ -325,19 +387,18 @@ int main(void)
             // Update Systems
             //----------------------------------------------------------------------------------
             UpdateDinoAnimationSystem(entities);
-            UpdateDinoPositionSystem(entities);
+            UpdatePositionSystem(entities);
             UpdateDinoPoseSystem(entities);
-            UpdateDinoVelocitySystem(entities);
+            UpdateVelocitySystem(entities);
             UpdateFrameCounterSystem(entities);
             UpdateCurrentFrameIndexSystem(entities);
-            UpdateCloudSystem(entities);
             //----------------------------------------------------------------------------------
 
             // Update game variables
             //----------------------------------------------------------------------------------
             frameCounter++;
             scrollIndex -= 2.5f * scrollMultiplier;
-            scrollMultiplier *= 1.0001f;
+            scrollMultiplier *= 1.001f;
             if (scrollIndex <= -horizonTexture.width)
             {
                 scrollIndex = 0;
@@ -437,18 +498,19 @@ void UpdateDinoPoseSystem(Entity *entities)
     }
 }
 
-void UpdateDinoPositionSystem(Entity *entities)
+void UpdatePositionSystem(Entity *entities)
 {
     for (int i = 0; i < nextEntityId; i++)
     {
-        if (!HasComponent(entities, i, DINO))
-            continue;
         if (!HasComponent(entities, i, POSITION))
             continue;
         if (!HasComponent(entities, i, VELOCITY))
             continue;
         positionComponents[i].x += velocityComponents[i].x;
         positionComponents[i].y += velocityComponents[i].y;
+
+        if (!HasComponent(entities, i, DINO))
+            continue;
         if (positionComponents[i].y > FLOOR_Y_POS)
         {
             positionComponents[i].y = FLOOR_Y_POS;
@@ -460,44 +522,60 @@ void UpdateDinoPositionSystem(Entity *entities)
     }
 }
 
-void UpdateDinoVelocitySystem(Entity *entities)
+void UpdateVelocitySystem(Entity *entities)
 {
     for (int i = 0; i < nextEntityId; i++)
     {
-        if (!HasComponent(entities, i, DINO))
-            continue;
         if (!HasComponent(entities, i, VELOCITY))
             continue;
         if (!HasComponent(entities, i, POSITION))
             continue;
-        if (!dinoComponents[i].isJumping)
+        if (HasComponent(entities, i, DINO))
         {
-            velocityComponents[i].y = 0;
-            dinoComponents[i].jumpFrameCount = 0;
+            UpdateDinoVelocity(i);
         }
-        else
+        if (HasComponent(entities, i, OBSTACLE))
         {
-            velocityComponents[i].y =
-                (INITIAL_JUMP_VELOCITY - DROP_VELOCITY) /
-                    pow((INITIAL_JUMP_VELOCITY - 2 * MIN_FRAME_SPEED), 2) *
-                    pow((dinoComponents[i].jumpFrameCount - 2 * MIN_FRAME_SPEED), 2) +
-                DROP_VELOCITY;
-            dinoComponents[i].jumpFrameCount++;
+            UpdateObstacleVelocity(i);
         }
+        if (HasComponent(entities, i, CLOUD))
+        {
+            UpdateCloudVelocity(i);
+        }
+    }
+}
 
-        if (positionComponents[i].x < DINO_PLAY_X_POS && positionComponents[i].y == FLOOR_Y_POS)
-        {
-            velocityComponents[i].x =
-                -sin(PI *
-                     ((positionComponents[i].x -
-                       (DINO_START_X_POS + DINO_PLAY_X_POS) / 2) /
-                      (DINO_PLAY_X_POS - DINO_START_X_POS)));
-        }
-        else
-        {
-            velocityComponents[i].x = 0;
-            dinoComponents[i].slideFrameCount = 0;
-        }
+void UpdateDinoVelocity(int i)
+{
+    if (!dinoComponents[i].isJumping)
+    {
+        velocityComponents[i].y = 0;
+        dinoComponents[i].jumpFrameCount = 0;
+    }
+    else
+    {
+        float A = (INITIAL_JUMP_VELOCITY - DROP_VELOCITY) / 2;
+        float f = 0.75f / (float)MIN_FRAME_SPEED;
+        float phi = PI / 2;
+        int t = dinoComponents[i].jumpFrameCount;
+        velocityComponents[i].y =
+            A *
+            sin(2 * PI * f * t + phi);
+        dinoComponents[i].jumpFrameCount++;
+    }
+
+    if (positionComponents[i].x < DINO_PLAY_X_POS && positionComponents[i].y == FLOOR_Y_POS)
+    {
+        velocityComponents[i].x =
+            -sin(PI *
+                 ((positionComponents[i].x -
+                   (DINO_START_X_POS + DINO_PLAY_X_POS) / 2) /
+                  (DINO_PLAY_X_POS - DINO_START_X_POS)));
+    }
+    else
+    {
+        velocityComponents[i].x = 0;
+        dinoComponents[i].slideFrameCount = 0;
     }
 }
 
@@ -545,23 +623,17 @@ void DrawSpriteSystem(Entity *entities)
     }
 }
 
-void UpdateCloudSystem(Entity *entities)
+void UpdateCloudVelocity(int i)
 {
-    for (int i = 0; i < nextEntityId; i++)
+    if (positionComponents[i].x < -spriteComponents[i].sourceRec.width)
     {
-        if (!HasComponent(entities, i, CLOUD))
-            continue;
-        if (!HasComponent(entities, i, POSITION))
-            continue;
-        if (!HasComponent(entities, i, VELOCITY))
-            continue;
-        positionComponents[i].x += velocityComponents[i].x;
-        if (positionComponents[i].x < -spriteComponents[i].sourceRec.width)
-        {
-            velocityComponents[i].x = GetRandomValue(1, 1.5);
-            positionComponents[i].x = GetRandomValue(WIDTH, WIDTH * MAX_CLOUDS);
-        }
+        velocityComponents[i].x = GetRandomValue(1, 1.5);
+        positionComponents[i].x = GetRandomValue(WIDTH, WIDTH * MAX_CLOUDS);
     }
+}
+
+void UpdateObstacleVelocity(int i)
+{
 }
 
 // ----------------------------------------------------------------------------------
