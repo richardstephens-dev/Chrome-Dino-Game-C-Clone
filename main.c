@@ -394,6 +394,37 @@ int main(void)
         {
             DrawTexture(gameOverTexture, (WIDTH - gameOverTexture.width) / 2, (HEIGHT - gameOverTexture.height) / 2, WHITE);
             DrawText(TextFormat("%i", score), 10, 10, 20, BLACK);
+            if (IsKeyPressed(KEY_ENTER))
+            {
+                gameState = PLAYING;
+                score = 0;
+                scrollMultiplier = 1;
+                scrollIndex = 0;
+                frameCounter = 0;
+                positionComponents[dinoId].x = DINO_START_X_POS;
+                positionComponents[dinoId].y = FLOOR_Y_POS;
+                velocityComponents[dinoId].x = 0;
+                velocityComponents[dinoId].y = 0;
+                dinoComponents[dinoId].isDead = false;
+                dinoComponents[dinoId].isDucking = false;
+                dinoComponents[dinoId].isJumping = false;
+                for (int i = 0; i < nextEntityId; i++)
+                {
+                    if (HasComponent(entities, i, OBSTACLE))
+                    {
+                        positionComponents[i].x = -1000;
+                        UpdateObstacleTypeSystem(entities);
+                        UpdateObstacleTextureSystem(entities, cactusLargeTexture, cactusSmallTexture, pterodactylTexture);
+                        UpdateObstacleVelocity(i, 1.0f);
+                        UpdateObstaclePosition(i, scrollIndex);
+                    }
+                    if (HasComponent(entities, i, CLOUD))
+                    {
+                        positionComponents[i].x = cloudComponents[i].xIndex * (cloudTexture.width + 20) + GetRandomValue(0, MAX_CLOUDS / 2) * WIDTH;
+                        positionComponents[i].y = 30 + cloudComponents[i].yIndex * (cloudTexture.height + 20);
+                    }
+                }
+            }
         }
 
         // Draw
@@ -453,6 +484,14 @@ void UpdateDinoAnimationSystem(Entity *entities, Texture2D dinoTexture, Texture2
             spriteComponents[i].sourceRec.height = (float)TREX_SPRITES_HEIGHT_DUCK;
             animationComponents[i].frameIndexSlice[0] = 0;
             animationComponents[i].frameIndexSlice[1] = 1;
+        }
+        else if (dinoComponents[i].isDead)
+        {
+            spriteComponents[i].texture = dinoTexture;
+            spriteComponents[i].sourceRec.width = (float)TREX_SPRITES_WIDTH;
+            spriteComponents[i].sourceRec.height = (float)TREX_SPRITES_HEIGHT;
+            animationComponents[i].frameIndexSlice[0] = 4;
+            animationComponents[i].frameIndexSlice[1] = 4;
         }
         else
         {
@@ -550,7 +589,8 @@ void UpdateDinoVelocity(int i, float scrollMultiplier)
         dinoComponents[i].jumpFrameCount++;
     }
 
-    if (positionComponents[i].x < DINO_PLAY_X_POS && positionComponents[i].y == FLOOR_Y_POS)
+    if (positionComponents[i].x < DINO_PLAY_X_POS &&
+        (positionComponents[i].y == FLOOR_Y_POS || dinoComponents[i].isDucking))
     {
         velocityComponents[i].x =
             -sin(PI *
@@ -741,7 +781,6 @@ void UpdateCollisionSystem(Entity *entities)
                 continue;
             if (!IsCollisionMaskOverlap(entities, i, j))
                 continue;
-            DrawText("GAME OVER", 10, 10, 20, RED);
             dinoComponents[j].isDead = true;
             break;
         }
@@ -753,13 +792,11 @@ bool IsCollisionMaskOverlap(Entity *entities, int i, int j)
     CollisionMask mask1 = GetCollisionMaskFromSprite(entities, i);
     CollisionMask mask2 = GetCollisionMaskFromSprite(entities, j);
 
-    // get the part of the mask that overlaps
     int xStart = (int)positionComponents[i].x - (int)positionComponents[j].x;
     int yStart = (int)positionComponents[i].y - (int)positionComponents[j].y;
     int xEnd = xStart + mask1.width;
     int yEnd = yStart + mask1.height;
 
-    // check if the masks overlap
     for (int x = xStart; x < xEnd; x++)
     {
         for (int y = yStart; y < yEnd; y++)
@@ -783,6 +820,7 @@ bool IsCollisionMaskOverlap(Entity *entities, int i, int j)
 CollisionMask GetCollisionMaskFromSprite(Entity *entities, int i)
 {
     Image image = LoadImageFromTexture(spriteComponents[i].texture);
+    ImageCrop(&image, (Rectangle){spriteComponents[i].sourceRec.x, spriteComponents[i].sourceRec.y, spriteComponents[i].sourceRec.width, spriteComponents[i].sourceRec.height});
     CollisionMask collisionMask = (CollisionMask){image.width, image.height, malloc(image.width * image.height)};
     for (int x = 0; x < image.width; x++)
     {
