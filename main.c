@@ -189,11 +189,19 @@ typedef struct Entity
     int id;
     int componentMask;
 } Entity;
+
+typedef struct CollisionMask
+{
+    int width, height;
+    bool *pixels;
+} CollisionMask;
+
 //----------------------------------------------------------------------------------
 
 // Local Functions Declaration
 //----------------------------------------------------------------------------------
-Entity CreateEntity();
+Entity
+CreateEntity();
 bool HasComponent(Entity *entities, int id, int component);
 void AddComponent(Entity *entities, int id, int component);
 void RemoveComponent(Entity *entities, int id, int component);
@@ -214,10 +222,12 @@ void UpdateCurrentFrameIndexSystem(Entity *entities);
 void UpdateObstacleTypeSystem(Entity *entities);
 void UpdateCollisionSystem(Entity *entities);
 void UpdateObstacleTextureSystem(Entity *entities, Texture2D cactusLargeTexture, Texture2D cactusSmallTexture, Texture2D pterodactylTexture);
+bool IsCollisionMaskOverlap(Entity *entities, int i, int j);
+CollisionMask GetCollisionMaskFromSprite(Entity *entities, int i);
 
 bool IsJumping(float y);
 bool IsDucking(int posY);
-bool IsColliding(Rectangle rec1, Rectangle rec2);
+bool IsSpriteOverlap(Rectangle rec1, Rectangle rec2);
 bool IsOutOfBounds(int i);
 //----------------------------------------------------------------------------------
 
@@ -715,26 +725,82 @@ void UpdateCollisionSystem(Entity *entities)
             continue;
         if (!HasComponent(entities, i, OBSTACLE))
             continue;
-        collisionComponents[i].collisionRec.x = positionComponents[i].x + 0.4f * spriteComponents[i].sourceRec.width;
-        collisionComponents[i].collisionRec.y = positionComponents[i].y + 0.4f * spriteComponents[i].sourceRec.height;
-        collisionComponents[i].collisionRec.width = spriteComponents[i].sourceRec.width * 0.6f;
-        collisionComponents[i].collisionRec.height = spriteComponents[i].sourceRec.height * 0.6f;
         for (int j = 0; j < nextEntityId; j++)
         {
             if (!HasComponent(entities, j, DINO))
                 continue;
-            collisionComponents[j].collisionRec.x = positionComponents[j].x + 0.05f * spriteComponents[j].sourceRec.width;
-            collisionComponents[j].collisionRec.y = positionComponents[j].y + 0.05f * spriteComponents[j].sourceRec.height;
-            collisionComponents[j].collisionRec.width = spriteComponents[j].sourceRec.width * 0.9f;
-            collisionComponents[j].collisionRec.height = spriteComponents[j].sourceRec.height * 0.9f;
-            if (HasComponent(entities, j, DINO) && IsColliding(collisionComponents[i].collisionRec, collisionComponents[j].collisionRec))
-            {
-                dinoComponents[j].isDead = true;
-                break;
-            }
+            if (!IsSpriteOverlap(
+                    (Rectangle){positionComponents[i].x,
+                                positionComponents[i].y,
+                                spriteComponents[i].sourceRec.width,
+                                spriteComponents[i].sourceRec.height},
+                    (Rectangle){positionComponents[j].x,
+                                positionComponents[j].y,
+                                spriteComponents[j].sourceRec.width,
+                                spriteComponents[j].sourceRec.height}))
+                continue;
+            if (!IsCollisionMaskOverlap(entities, i, j))
+                continue;
+            DrawText("GAME OVER", 10, 10, 20, RED);
+            dinoComponents[j].isDead = true;
+            break;
         }
     }
 }
+
+bool IsCollisionMaskOverlap(Entity *entities, int i, int j)
+{
+    CollisionMask mask1 = GetCollisionMaskFromSprite(entities, i);
+    CollisionMask mask2 = GetCollisionMaskFromSprite(entities, j);
+
+    // get the part of the mask that overlaps
+    int xStart = (int)positionComponents[i].x - (int)positionComponents[j].x;
+    int yStart = (int)positionComponents[i].y - (int)positionComponents[j].y;
+    int xEnd = xStart + mask1.width;
+    int yEnd = yStart + mask1.height;
+
+    // check if the masks overlap
+    for (int x = xStart; x < xEnd; x++)
+    {
+        for (int y = yStart; y < yEnd; y++)
+        {
+            if (x < 0 || x >= mask2.width || y < 0 || y >= mask2.height)
+                continue;
+            if (mask1.pixels[(x - xStart) + (y - yStart) * mask1.width] == 1 && mask2.pixels[x + y * mask2.width] == 1)
+            {
+                free(mask1.pixels);
+                free(mask2.pixels);
+                return true;
+            }
+        }
+    }
+
+    free(mask1.pixels);
+    free(mask2.pixels);
+    return false;
+}
+
+CollisionMask GetCollisionMaskFromSprite(Entity *entities, int i)
+{
+    Image image = LoadImageFromTexture(spriteComponents[i].texture);
+    CollisionMask collisionMask = (CollisionMask){image.width, image.height, malloc(image.width * image.height)};
+    for (int x = 0; x < image.width; x++)
+    {
+        for (int y = 0; y < image.height; y++)
+        {
+            Color pixelColor = GetImageColor(image, x, y);
+            if (pixelColor.a == 0)
+            {
+                collisionMask.pixels[x + y * image.width] = 0;
+                continue;
+            }
+            collisionMask.pixels[x + y * image.width] = 1;
+        }
+    }
+    UnloadImage(image);
+    return collisionMask;
+}
+
 // ----------------------------------------------------------------------------------
 
 // Helper Functions Definition
@@ -769,7 +835,7 @@ bool IsDucking(int posY)
     return false;
 }
 
-bool IsColliding(Rectangle rec1, Rectangle rec2)
+bool IsSpriteOverlap(Rectangle rec1, Rectangle rec2)
 {
     if (CheckCollisionRecs(rec1, rec2))
     {
