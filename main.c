@@ -93,7 +93,7 @@ const float INITIAL_JUMP_VELOCITY = -24.0f;
 const float DROP_VELOCITY = 12.0f;
 const float DINO_START_X_POS = 250.0f;
 const float DINO_PLAY_X_POS = WIDTH / 2 + TREX_SPRITES_WIDTH;
-const int MAX_OBSTACLES = 3;
+const int MAX_OBSTACLES = 2;
 
 enum ComponentsEnum
 {
@@ -294,7 +294,7 @@ int main(void)
 
     int frameCounter = 0;
     int score = 0;
-    float scrollMultiplier = 1;
+    float scrollMultiplier = 1.5;
     float scrollIndex = 0;
 
     SetTargetFPS(60);
@@ -351,13 +351,13 @@ int main(void)
         {
             // Update Systems
             //----------------------------------------------------------------------------------
-            UpdatePositionSystem(entities, scrollIndex);
             UpdateDinoPoseSystem(entities);
             UpdateDinoAnimationSystem(entities, dinoTexture, dinoDuckTexture);
             UpdateVelocitySystem(entities, scrollMultiplier);
             UpdateObstacleTypeSystem(entities);
             UpdateFrameCounterSystem(entities);
             UpdateCurrentFrameIndexSystem(entities);
+            UpdatePositionSystem(entities, scrollIndex);
             UpdateCollisionSystem(entities);
             UpdateObstacleTextureSystem(entities, cactusLargeTexture, cactusSmallTexture, pterodactylTexture);
             //----------------------------------------------------------------------------------
@@ -366,7 +366,12 @@ int main(void)
             //----------------------------------------------------------------------------------
             frameCounter++;
             scrollIndex -= 2.5f * scrollMultiplier;
-            scrollMultiplier *= 1.0005f;
+            scrollMultiplier *= 1.00015f;
+            if (score % 100 == 0 && score != 0)
+            {
+                scrollMultiplier += 0.005f * score / 100;
+            }
+
             if (scrollIndex <= -horizonTexture.width)
             {
                 scrollIndex = 0;
@@ -394,6 +399,8 @@ int main(void)
         {
             DrawTexture(gameOverTexture, (WIDTH - gameOverTexture.width) / 2, (HEIGHT - gameOverTexture.height) / 2, WHITE);
             DrawText(TextFormat("%i", score), 10, 10, 20, BLACK);
+            UpdateDinoAnimationSystem(entities, dinoTexture, dinoDuckTexture);
+            spriteComponents[dinoId].sourceRec.x = (float)spriteComponents[dinoId].sourceRec.width * (float)(animationComponents[dinoId].currentFrameIndex + animationComponents[dinoId].frameIndexSlice[0]);
             if (IsKeyPressed(KEY_ENTER))
             {
                 gameState = PLAYING;
