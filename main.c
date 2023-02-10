@@ -30,17 +30,6 @@
 const int MAX_FRAME_SPEED = 99;
 const int MIN_FRAME_SPEED = 60;
 const int FPS = 60;
-const float ACCELERATION = 0.001;
-const float BG_CLOUD_SPEED = 0.2;
-const int BOTTOM_PAD = 10;
-const int CLEAR_TIME = 3000;
-const float CLOUD_FREQUENCY = 0.5;
-const int GAMEOVER_CLEAR_TIME = 750;
-const float GAP_COEFFICIENT = 0.6;
-const int INIITAL_JUMP_VELOCITY = 12;
-const int INVERT_FADE_DURATION = 12000;
-const int INVERT_DISTANCE = 700;
-const int MAX_BLINK_COUNT = 3;
 const int MAX_CLOUDS = 6;
 const int MAX_OBSTACLE_LENGTH = 3;
 const int MAX_OBSTACLE_DUPLICATION = 2;
@@ -67,26 +56,10 @@ const int CLOUD_SPRITE_HEIGHT = 27;
 const int HORIZON_SPRITE_X = 2;
 const int HORIZON_SPRITE_Y = 104;
 const int HORIZON_SPRITE_WIDTH = 600;
-const int MOON_SPRITE_X = 954;
-const int MOON_SPRITE_Y = 2;
 const int PTERODACTYL_SPRITE_X = 260;
 const int PTERODACTYL_SPRITE_Y = 2;
 const int PTERODACTYL_SPRITE_WIDTH = 46;
 const int PTERODACTYL_SPRITE_HEIGHT = 40;
-const int RESTART_SPRITE_X = 2;
-const int RESTART_SPRITE_Y = 2;
-const int RESTART_SPRITE_WIDTH = 46;
-const int RESTART_SPRITE_HEIGHT = 40;
-const int TEXT_SPRITE_X = 1294;
-const int TEXT_SPRITE_Y = 2;
-const int TEXT_SPRITE_WIDTH = 192;
-const int TEXT_SPRITE_HEIGHT = 11;
-const int STAR_SPRITE_X = 1276;
-const int STAR_SPRITE_Y = 2;
-const int JUMP_KEY = 38;
-const int JUMP_KEY_ALT = 32;
-const int DUCK_KEY = 40;
-const int RESTART_KEY = 13;
 const float FLOOR_Y_POS = 0.8f * HEIGHT;
 const float JUMP_Y_POS = 100.0f;
 const float INITIAL_JUMP_VELOCITY = -24.0f;
@@ -224,6 +197,9 @@ void UpdateCollisionSystem(Entity *entities);
 void UpdateObstacleTextureSystem(Entity *entities, Texture2D cactusLargeTexture, Texture2D cactusSmallTexture, Texture2D pterodactylTexture);
 bool IsCollisionMaskOverlap(Entity *entities, int i, int j);
 CollisionMask GetCollisionMaskFromSprite(Entity *entities, int i);
+int LoadHighScore();
+void SaveHighScore(int score);
+void DrawScore(int score, int highScore, Texture2D scoreTexture);
 
 bool IsJumping(float y);
 bool IsDucking(int posY);
@@ -276,6 +252,10 @@ int main(void)
     Texture2D gameOverTexture = LoadTextureFromImage(gameOverImage);
     UnloadImage(gameOverImage);
 
+    Image scoreImage = LoadImage("resources/scores.png");
+    Texture2D scoreTexture = LoadTextureFromImage(scoreImage);
+    UnloadImage(scoreImage);
+
     Entity entities[MAX_ENTITIES];
     int dinoId = nextEntityId;
     entities[dinoId] = CreateEntity();
@@ -294,8 +274,9 @@ int main(void)
 
     int frameCounter = 0;
     int score = 0;
-    float scrollMultiplier = 1.5;
+    float scrollMultiplier = 1.75;
     float scrollIndex = 0;
+    int highScore = LoadHighScore();
 
     SetTargetFPS(60);
 
@@ -324,7 +305,7 @@ int main(void)
         AddComponent(entities, cloudId, VELOCITY);
         AddComponent(entities, cloudId, SPRITE);
         AddComponent(entities, cloudId, CLOUD);
-        velocityComponents[cloudId].x = -GetRandomValue(1, 1.5);
+        velocityComponents[cloudId].x = -1.0f;
         velocityComponents[cloudId].y = 0;
         spriteComponents[cloudId].texture = cloudTexture;
         spriteComponents[cloudId].sourceRec = (Rectangle){0, 0, (float)cloudTexture.width, (float)cloudTexture.height};
@@ -351,15 +332,15 @@ int main(void)
         {
             // Update Systems
             //----------------------------------------------------------------------------------
+            UpdatePositionSystem(entities, scrollIndex);
             UpdateDinoPoseSystem(entities);
             UpdateDinoAnimationSystem(entities, dinoTexture, dinoDuckTexture);
             UpdateVelocitySystem(entities, scrollMultiplier);
             UpdateObstacleTypeSystem(entities);
             UpdateFrameCounterSystem(entities);
             UpdateCurrentFrameIndexSystem(entities);
-            UpdatePositionSystem(entities, scrollIndex);
-            UpdateCollisionSystem(entities);
             UpdateObstacleTextureSystem(entities, cactusLargeTexture, cactusSmallTexture, pterodactylTexture);
+            UpdateCollisionSystem(entities);
             //----------------------------------------------------------------------------------
 
             // Update game variables
@@ -378,7 +359,7 @@ int main(void)
             }
             if (frameCounter % 10 == 0)
             {
-                score += 1 * scrollMultiplier;
+                score += fmax(1 * scrollMultiplier, 1.0f);
             }
 
             if (dinoComponents[dinoId].isDead)
@@ -387,25 +368,23 @@ int main(void)
             }
 
             //----------------------------------------------------------------------------------
-
-            // Temporary / Testing / Debug
-            //----------------------------------------------------------------------------------
-            DrawText(TextFormat("FPS: %i", GetFPS()), 400, 10, 20, BLACK);
-            DrawText(TextFormat("%i", score), 10, 10, 20, BLACK);
-            //----------------------------------------------------------------------------------
         }
 
         if (gameState == GAMEOVER)
         {
+            SaveFileData("highscore.txt", &score, sizeof(int));
             DrawTexture(gameOverTexture, (WIDTH - gameOverTexture.width) / 2, (HEIGHT - gameOverTexture.height) / 2, WHITE);
-            DrawText(TextFormat("%i", score), 10, 10, 20, BLACK);
+            DrawTexture(restartTexture, (WIDTH - restartTexture.width) / 2, (HEIGHT - restartTexture.height) / 2 + 100, WHITE);
             UpdateDinoAnimationSystem(entities, dinoTexture, dinoDuckTexture);
             spriteComponents[dinoId].sourceRec.x = (float)spriteComponents[dinoId].sourceRec.width * (float)(animationComponents[dinoId].currentFrameIndex + animationComponents[dinoId].frameIndexSlice[0]);
-            if (IsKeyPressed(KEY_ENTER))
+
+            if (IsKeyPressed(KEY_ENTER) || (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
+                                            (GetMousePosition().x >= (WIDTH - restartTexture.width) / 2 && GetMousePosition().x <= (WIDTH - restartTexture.width) / 2 + restartTexture.width) &&
+                                            (GetMousePosition().y >= (HEIGHT - restartTexture.height) / 2 + 100 && GetMousePosition().y <= (HEIGHT - restartTexture.height) / 2 + 100 + restartTexture.height)))
             {
                 gameState = PLAYING;
                 score = 0;
-                scrollMultiplier = 1;
+                scrollMultiplier = 1.75;
                 scrollIndex = 0;
                 frameCounter = 0;
                 positionComponents[dinoId].x = DINO_START_X_POS;
@@ -438,6 +417,11 @@ int main(void)
         //----------------------------------------------------------------------------------
         BeginDrawing();
         ClearBackground(RAYWHITE);
+        if (score > highScore)
+        {
+            highScore = score;
+        }
+        DrawScore(score, highScore, scoreTexture);
         DrawTextureEx(horizonTexture, (Vector2){scrollIndex, FLOOR_Y_POS + TREX_SPRITES_HEIGHT - 38}, 0.0f, 1.0f, WHITE);
         DrawTextureEx(horizonTexture, (Vector2){scrollIndex + horizonTexture.width, FLOOR_Y_POS + TREX_SPRITES_HEIGHT - 38}, 0.0f, 1.0f, WHITE);
         DrawSpriteSystem(entities);
@@ -456,6 +440,7 @@ int main(void)
     UnloadTexture(cactusSmallTexture);
     UnloadTexture(cloudTexture);
     UnloadTexture(gameOverTexture);
+    UnloadTexture(scoreTexture);
 
     CloseWindow(); // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
@@ -476,7 +461,15 @@ void UpdateDinoAnimationSystem(Entity *entities, Texture2D dinoTexture, Texture2
             continue;
         if (!HasComponent(entities, i, SPRITE))
             continue;
-        if (positionComponents[i].y < FLOOR_Y_POS)
+        if (dinoComponents[i].isDead)
+        {
+            spriteComponents[i].texture = dinoTexture;
+            spriteComponents[i].sourceRec.width = (float)TREX_SPRITES_WIDTH;
+            spriteComponents[i].sourceRec.height = (float)TREX_SPRITES_HEIGHT;
+            animationComponents[i].frameIndexSlice[0] = 4;
+            animationComponents[i].frameIndexSlice[1] = 4;
+        }
+        else if (positionComponents[i].y < FLOOR_Y_POS)
         {
             spriteComponents[i].texture = dinoTexture;
             spriteComponents[i].sourceRec.width = (float)TREX_SPRITES_WIDTH;
@@ -491,14 +484,6 @@ void UpdateDinoAnimationSystem(Entity *entities, Texture2D dinoTexture, Texture2
             spriteComponents[i].sourceRec.height = (float)TREX_SPRITES_HEIGHT_DUCK;
             animationComponents[i].frameIndexSlice[0] = 0;
             animationComponents[i].frameIndexSlice[1] = 1;
-        }
-        else if (dinoComponents[i].isDead)
-        {
-            spriteComponents[i].texture = dinoTexture;
-            spriteComponents[i].sourceRec.width = (float)TREX_SPRITES_WIDTH;
-            spriteComponents[i].sourceRec.height = (float)TREX_SPRITES_HEIGHT;
-            animationComponents[i].frameIndexSlice[0] = 4;
-            animationComponents[i].frameIndexSlice[1] = 4;
         }
         else
         {
@@ -685,6 +670,10 @@ void UpdateDinoPosition(int i)
     {
         positionComponents[i].y = FLOOR_Y_POS + (TREX_SPRITES_HEIGHT - TREX_SPRITES_HEIGHT_DUCK);
     }
+    if (dinoComponents[i].isDead)
+    {
+        positionComponents[i].y = FLOOR_Y_POS;
+    }
     if (positionComponents[i].x > WIDTH / 2)
     {
         positionComponents[i].x = WIDTH / 2;
@@ -742,14 +731,14 @@ void UpdateObstacleTextureSystem(Entity *entities, Texture2D cactusLargeTexture,
             RemoveComponent(entities, i, ANIMATION);
             spriteComponents[i].texture = cactusLargeTexture;
             int spriteOffsetLargeCactus = GetRandomValue(0, 3);
-            int clusterSizeLargeCactus = GetRandomValue(1, 3);
+            int clusterSizeLargeCactus = GetRandomValue(1, 2);
             spriteComponents[i].sourceRec = (Rectangle){cactusLargeTexture.width / 6.0f * (float)spriteOffsetLargeCactus, 0, (float)cactusLargeTexture.width / 6.0f * (float)clusterSizeLargeCactus, (float)cactusLargeTexture.height};
             break;
         case CACTUS_SMALL:
             RemoveComponent(entities, i, ANIMATION);
             spriteComponents[i].texture = cactusSmallTexture;
             int spriteOffsetSmallCactus = GetRandomValue(0, 6);
-            int clusterSizeSmallCactus = GetRandomValue(1, 3);
+            int clusterSizeSmallCactus = GetRandomValue(1, 2);
             spriteComponents[i].sourceRec = (Rectangle){cactusSmallTexture.width / 6.0f * (float)spriteOffsetSmallCactus, 0, (float)cactusSmallTexture.width / 6.0f * (float)clusterSizeSmallCactus, (float)cactusSmallTexture.height};
             break;
         case PTERODACTYL:
@@ -896,6 +885,66 @@ bool IsOutOfBounds(int i)
         return true;
     }
     return false;
+}
+
+void DrawScore(int score, int highScore, Texture2D scoreTexture)
+{
+    DrawText(TextFormat("%i", score), 50, 10, 20, BLACK);
+    DrawText(TextFormat("HI %i", highScore), 120, 10, 20, BLACK);
+}
+
+int LoadHighScore()
+{
+    int highScore = 0;
+    unsigned int dataSize = 0;
+    unsigned char *fileData = LoadFileData("highscore.txt", &dataSize);
+    if (fileData != NULL)
+    {
+        int *dataPtr = (int *)fileData;
+        highScore = *dataPtr;
+    }
+    UnloadFileData(fileData);
+    return highScore;
+}
+
+void SaveHighScore(int highScore)
+{
+    unsigned int dataSize = 0;
+    unsigned int newDatasize = 0;
+    unsigned char *fileData = LoadFileData("highscore.txt", &dataSize);
+    unsigned char *newFileData = NULL;
+
+    if (fileData != NULL)
+    {
+        if (dataSize <= sizeof(int))
+        {
+            newDatasize = sizeof(int);
+            newFileData = (unsigned char *)realloc(fileData, newDatasize);
+
+            if (newFileData != NULL)
+            {
+                int *dataPtr = (int *)newFileData;
+                *dataPtr = highScore;
+            }
+        }
+        else
+        {
+            newDatasize = dataSize;
+            newFileData = fileData;
+            int *dataPtr = (int *)newFileData;
+            *dataPtr = highScore;
+        }
+        RL_FREE(newFileData);
+    }
+    else
+    {
+        dataSize = sizeof(int);
+        fileData = (unsigned char *)malloc(dataSize);
+        int *dataPtr = (int *)fileData;
+        *dataPtr = highScore;
+        SaveFileData("highscore.txt", fileData, dataSize);
+        UnloadFileData(fileData);
+    }
 }
 // ----------------------------------------------------------------------------------
 
